@@ -1,9 +1,13 @@
+using System;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Anki.Backend;
 using Anki.Decks;
 using Anki.Notes;
 using Anki.Search;
+using Xunit;
 
 namespace Ankit.Native.Tests;
 
