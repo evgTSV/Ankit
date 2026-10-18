@@ -176,15 +176,16 @@ Target.create "Verify-Encoding" (fun _ ->
     | Ok () -> ()
     | Error errors ->
         traceErrors errors
-        failwithf $"%d{errors.Length} file(s) are not UTF-8 without BOM")
+        failwithf $"%d{errors.Length} file(s) are not UTF-8 without BOM, please run Remove-BOM or Prepare-Sources target")
 
 let removeBom (file: string) =
     try
         let bytes = ReadOnlySpan(File.ReadAllBytes(file))
-        if hasBom bytes then
+        let hasBom = hasBom bytes
+        if hasBom then
             let newBytes = bytes.Slice(utf8Bom.Length)
             File.WriteAllBytes(file, newBytes)
-        Ok()
+        Ok hasBom
     with ex ->
         Error $"%s{relative file}: %s{ex.Message}"
 
@@ -195,8 +196,9 @@ Target.create "Remove-BOM" (fun _ ->
             files
             |> List.fold (fun acc f ->
                 match removeBom f with
-                | Ok () ->
-                    Trace.log $"Removed BOM from %s{relative f}"
+                | Ok hasBom ->
+                    if hasBom then
+                        Trace.log $"Removed BOM from %s{relative f}"
                     acc
                 | Error e -> e :: acc) []
         if errors.Length > 0 then
@@ -264,8 +266,12 @@ Target.create "Prepare-Sources" doNothing
 
 "Restore"
     ==> "Format"
-    ==> "Remove-BOM"
+
+"Remove-BOM"
     =?> ("Prepare-Sources", verifyEncoding() |> Result.isError)
+
+"Format"
+    ==> "Prepare-Sources"
 
 if DocoptResult.hasFlag "--list" cli then
     Target.listAvailable ()
