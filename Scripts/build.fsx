@@ -8,6 +8,7 @@
 
 open System
 open System.IO
+open System.Runtime.InteropServices
 open System.Text
 open System.Text.Unicode
 open Fake.Core
@@ -21,13 +22,17 @@ open FsToolkit.ErrorHandling
 let project = "Ankit"
 let description = "A F# service for managing Anki decks with lightweight binding to the Anki rslib"
 let summary = "A F# service for managing Anki decks with lightweight binding to the Anki rslib"
-let license = "MIT"
+let license = "AGPL-3.0-or-later"
 let authors = [ "EvgTsv" ]
+let copyright = "Copyright (C) 2026 Evgenii Tsvetkov"
+let version = Version(1, 0, 0, 0)
 
 let isCI = Environment.GetEnvironmentVariable("CI") <> null
 
 let root = Path.GetFullPath(__SOURCE_DIRECTORY__ + "/..")
 let solution = root + "/Ankit.sln"
+let rslibBindings = root + "/rslib-bindings"
+let ankiSources = root + "/paket-files/anki/ankitects/anki"
 let usage =
     """
 Usage:
@@ -40,6 +45,7 @@ Options:
   -p, --parallel <jobs>       Number of targets to run in parallel (default: 1).
   --list                      List available targets.
   -h, --help                  Show this help.
+  --no-logo                   Do not display the logo.
 """
 
 let args =
@@ -84,6 +90,9 @@ if targetName.StartsWith "-" then
     eprintfn $"%s{usage}"
     exit 1
 
+if not(DocoptResult.hasFlag "--no-logo" cli) then
+    Trace.log $"%s{project} v{version}"
+
 let traceErrors (errors: string list) =
     errors |> List.iter Trace.traceError
 
@@ -105,6 +114,18 @@ let dotnetCli : DotNet.Options -> DotNet.Options = id
 // Fake's binlog reader does not support the binlog format of current MSBuild versions
 let noBinLog (p: MSBuild.CliArguments) = { p with DisableInternalBinLog = true }
 
+// Project metadata above is the single source for the assemblies and packages of every project
+let metadata (p: MSBuild.CliArguments) =
+    { noBinLog p with
+        Properties =
+            p.Properties
+            @ [ "Product", project
+                "Description", description
+                "Version", string version
+                "Authors", String.concat "," authors
+                "Copyright", copyright
+                "PackageLicenseExpression", license ] }
+
 let dotnet command args =
     DotNet.exec dotnetCli command args |> fromProcResult
 
@@ -123,11 +144,12 @@ let repoFiles() =
 let relative (path: string) = Path.GetRelativePath(root, path)
 
 Target.create "Info" (fun _ ->
-    Trace.log $"Project: %s{project}"
+    Trace.log $"Project: %s{project} v{version}"
     Trace.log $"Description: %s{description}"
     Trace.log $"Summary: %s{summary}"
     Trace.log $"License: %s{license}"
     Trace.log $"Authors: %A{authors}"
+    Trace.log $"Copyright: %s{copyright}"
     Trace.log $"Root directory: %s{root}"
     Trace.log $"Solution file: %s{solution}"
     Trace.log $"Configuration: %A{configuration}")
@@ -218,7 +240,7 @@ Target.create "Build" (fun _ ->
             { p with
                 Common = dotnetCli p.Common
                 Configuration = configuration
-                MSBuildParams = noBinLog p.MSBuildParams })
+                MSBuildParams = metadata p.MSBuildParams })
         solution)
 
 Target.create "Test" (fun _ ->
@@ -238,7 +260,7 @@ Target.create "Coverage" (fun _ ->
             Configuration = configuration
             Collect = Some "XPlat Code Coverage"
             ResultsDirectory = Some "coverage-results"
-            DotNet.TestOptions.MSBuildParams.DisableInternalBinLog = true
+            MSBuildParams = metadata o.MSBuildParams
             Logger = if isCI then Some "GitHubActions" else None
     }
 
@@ -252,15 +274,95 @@ Target.create "Coverage" (fun _ ->
         "  reportgenerator -reports:coverage-results/**/coverage.cobertura.xml -targetdir:coverage-report -reporttypes:Html"
     Trace.log "")
 
+// --- Anki rslib bindings ---
+
+// protoc shipped with Grpc.Tools (Paket group Native), the same one Ankit.Native generates its C# classes with
+let grpcToolsProtoc =
+    let platform =
+        match RuntimeInformation.OSArchitecture with
+        | _ when RuntimeInformation.IsOSPlatform OSPlatform.OSX -> "macosx_universal"
+        // Grpc.Tools has no Windows Arm64 build, the x64 one runs under emulation
+        | Architecture.X86 when RuntimeInformation.IsOSPlatform OSPlatform.Windows -> "windows_x86"
+        | _ when RuntimeInformation.IsOSPlatform OSPlatform.Windows -> "windows_x64"
+        | Architecture.Arm64 -> "linux_arm64"
+        | Architecture.X86 -> "linux_x86"
+        | _ -> "linux_x64"
+
+    let exe = if RuntimeInformation.IsOSPlatform OSPlatform.Windows then "protoc.exe" else "protoc"
+    Path.Combine(root, "packages", "native", "Grpc.Tools", "tools", platform, exe)
+
+let protocDir = rslibBindings + "/tools/protoc"
+
+// Copied to the stable path .cargo/config.toml points PROTOC at, so plain cargo commands work too
+let copyProtoc () =
+    if not (File.Exists grpcToolsProtoc) then
+        Error [ $"protoc not found at %s{relative grpcToolsProtoc}, run the Restore target" ]
+    else
+        let target = Path.Combine(protocDir, "bin", Path.GetFileName grpcToolsProtoc)
+        Directory.CreateDirectory(Path.GetDirectoryName target) |> ignore
+        File.Copy(grpcToolsProtoc, target, true)
+
+        if not (RuntimeInformation.IsOSPlatform OSPlatform.Windows) then
+            File.SetUnixFileMode(target, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+
+        Trace.log $"Using protoc from %s{relative grpcToolsProtoc}"
+        Ok()
+
+let cargo (args: string list) =
+    CreateProcess.fromRawCommand "cargo" args
+    |> CreateProcess.withWorkingDirectory rslibBindings
+    |> Proc.run
+    |> fun r ->
+        let command = String.concat " " args
+        if r.ExitCode = 0 then Ok() else Error [ $"cargo %s{command} failed" ]
+
+let cargoProfile =
+    match configuration with
+    | DotNet.BuildConfiguration.Release -> [ "--release" ]
+    | _ -> []
+
+Target.create "Setup-Rslib" (fun _ ->
+    result {
+        if not (Directory.Exists ankiSources) then
+            return! Error [ $"Anki sources not found at %s{relative ankiSources}, run the Restore target" ]
+
+        // GitHub archives restored by Paket do not contain git submodules. rslib only needs the
+        // translation folders to exist, so without them it is built with the English strings only
+        for folder in [ "ftl/core-repo/core"; "ftl/qt-repo/desktop" ] do
+            Directory.CreateDirectory(Path.Combine(ankiSources, folder)) |> ignore
+
+        // Copied on every run, so that a Grpc.Tools update reaches the Rust build as well
+        do! copyProtoc ()
+    }
+    |> handleResult "Setup-Rslib")
+
+let csharpClient = root + "/Ankit.Native/Generated/RslibBackend.Methods.g.cs"
+
+Target.create "Build-Rslib" (fun _ ->
+    result {
+        do! cargo ([ "build"; "--locked" ] @ cargoProfile)
+        // Regenerate the typed C# client from the descriptor set the build has just written
+        do! cargo [ "run"; "--locked"; "--quiet"; "-p"; "csharp-gen"; "--"; csharpClient ]
+    }
+    |> handleResult "Build-Rslib")
+
+Target.create "Test-Rslib" (fun _ -> cargo ([ "test"; "--locked" ] @ cargoProfile) |> handleResult "Test-Rslib")
+
 Target.create "All" doNothing
 Target.create "Prepare-Sources" doNothing
 
 "Build" <== [
     "Restore"
     "Clean"
+    "Build-Rslib"
 ]
 
-"Build"
+// Soft dependency, so the Rust targets can be run on their own once Paket has restored the Anki sources
+"Restore" ?=> "Setup-Rslib"
+
+"Setup-Rslib"
+    ==> "Build"
+    ==> "Test-Rslib"
     ==> "Test"
     ==> "All"
 
@@ -274,6 +376,6 @@ Target.create "Prepare-Sources" doNothing
     ==> "Prepare-Sources"
 
 if DocoptResult.hasFlag "--list" cli then
-    Target.listAvailable ()
+    Target.listAvailable()
 else
     Target.run parallelJobs targetName []

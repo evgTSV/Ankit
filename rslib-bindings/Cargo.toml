@@ -1,0 +1,41 @@
+[package]
+name = "ankit-rslib"
+version = "1.0.0"
+authors = ["EvgTsv"]
+edition = "2021"
+rust-version = "1.80"
+license = "AGPL-3.0-or-later"
+publish = false
+description = "C ABI bridge between Ankit.Native and Anki's rslib, speaking protobuf"
+
+# Standalone workspace, so Cargo never tries to attach this crate to the Anki workspace
+[workspace]
+members = ["csharp-gen"]
+
+[lib]
+name = "ankit_rslib"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Anki sources are restored by Paket (group Anki) into paket-files
+anki = { path = "../paket-files/anki/ankitects/anki/rslib" }
+anki_proto = { path = "../paket-files/anki/ankitects/anki/rslib/proto" }
+
+[dev-dependencies]
+anki_proto_gen = { path = "../paket-files/anki/ankitects/anki/rslib/proto_gen" }
+prost = "0.13"
+prost-reflect = "0.14.7"
+
+[features]
+default = ["rustls"]
+rustls = ["anki/rustls"]
+native-tls = ["anki/native-tls"]
+
+# Same as Anki: dependencies are built with mild optimizations in dev mode,
+# otherwise hashing and the database layer are painfully slow
+[profile.dev.package."*"]
+opt-level = 1
+debug = 0
+
+[profile.release]
+lto = "thin"

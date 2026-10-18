@@ -1,0 +1,83 @@
+using System.Runtime.InteropServices;
+
+namespace Ankit.Native.Interop;
+
+/// <summary>
+/// P/Invoke declarations of the ankit_rslib native library, see rslib-bindings/include/ankit_rslib.h.
+/// </summary>
+internal static unsafe partial class NativeMethods
+{
+    private const string Library = "ankit_rslib";
+
+    public const int Ok = 0;
+    public const int BackendError = 1;
+    public const int Panic = 2;
+    public const int InvalidArgument = 3;
+
+    [LibraryImport(Library, EntryPoint = "ankit_buildhash")]
+    public static partial byte* BuildHash();
+
+    [LibraryImport(Library, EntryPoint = "ankit_initialize_logging")]
+    public static partial int InitializeLogging(byte* path, nuint pathLength, out AnkitBuffer error);
+
+    [LibraryImport(Library, EntryPoint = "ankit_backend_open")]
+    public static partial int BackendOpen(byte* init, nuint initLength, out BackendHandle backend,
+        out AnkitBuffer error);
+
+    [LibraryImport(Library, EntryPoint = "ankit_backend_close")]
+    public static partial void BackendClose(nint backend);
+
+    [LibraryImport(Library, EntryPoint = "ankit_backend_command")]
+    public static partial int BackendCommand(BackendHandle backend, uint service, uint method, byte* input,
+        nuint inputLength, out AnkitBuffer output);
+
+    [LibraryImport(Library, EntryPoint = "ankit_backend_db_command")]
+    public static partial int BackendDbCommand(BackendHandle backend, byte* input, nuint inputLength,
+        out AnkitBuffer output);
+
+    [LibraryImport(Library, EntryPoint = "ankit_buffer_free")]
+    public static partial void BufferFree(AnkitBuffer buffer);
+}
+
+/// <summary>
+/// A byte buffer owned by the native library, must be released with <see cref="NativeMethods.BufferFree"/>.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct AnkitBuffer
+{
+    public byte* Data;
+    public nuint Length;
+
+    public readonly ReadOnlySpan<byte> AsSpan() => Data == null ? [] : new ReadOnlySpan<byte>(Data, checked((int)Length));
+
+    /// <summary>
+    /// Copies the contents to managed memory and releases the native buffer.
+    /// </summary>
+    public byte[] TakeBytes()
+    {
+        try
+        {
+            return [.. AsSpan()];
+        }
+        finally
+        {
+            NativeMethods.BufferFree(this);
+            Data = null;
+            Length = 0;
+        }
+    }
+}
+
+/// <summary>
+/// Owns a native backend, closing it when released.
+/// </summary>
+internal sealed class BackendHandle() : SafeHandle(nint.Zero, ownsHandle: true)
+{
+    public override bool IsInvalid => handle == nint.Zero;
+
+    protected override bool ReleaseHandle()
+    {
+        NativeMethods.BackendClose(handle);
+        return true;
+    }
+}

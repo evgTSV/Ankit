@@ -6,6 +6,13 @@ group WebServer
 
     nuget Oxpecker 2.1.1
 
+group Native
+    source https://api.nuget.org/v3/index.json
+    framework: net10.0
+
+    nuget Google.Protobuf
+    nuget Grpc.Tools
+
 group Anki
     github ankitects/anki:26.09.3
 

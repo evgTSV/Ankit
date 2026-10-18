@@ -1,0 +1,3 @@
+group Native
+    Google.Protobuf
+    Grpc.Tools
