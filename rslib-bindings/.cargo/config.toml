@@ -1,0 +1,6 @@
+[env]
+# protoc is copied from Grpc.Tools by the Setup-Rslib build target; Anki's build script appends .exe on Windows
+PROTOC = { value = "tools/protoc/bin/protoc", relative = true }
+# Descriptor set of Anki's protos, written by rslib's build scripts. Kept at a stable path so that
+# Ankit.Native can generate its client (service and method indices) from it
+DESCRIPTORS_BIN = { value = "target/anki_descriptors.bin", relative = true }

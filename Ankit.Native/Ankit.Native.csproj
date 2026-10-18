@@ -1,10 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
-   <PropertyGroup>
-      <TargetFramework>net10.0</TargetFramework>
-      <ImplicitUsings>enable</ImplicitUsings>
-      <Nullable>enable</Nullable>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Generated protobuf classes have no XML docs -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
+
+  <PropertyGroup>
+    <AnkiProtoRoot>..\paket-files\anki\ankitects\anki\proto</AnkiProtoRoot>
+    <!-- Cargo profile built by the Build-Rslib target for this configuration -->
+    <RslibProfile Condition="'$(Configuration)' == 'Release'">release</RslibProfile>
+    <RslibProfile Condition="'$(RslibProfile)' == ''">debug</RslibProfile>
+    <RslibOutput>..\rslib-bindings\target\$(RslibProfile)</RslibOutput>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Protobuf Include="$(AnkiProtoRoot)\anki\*.proto" ProtoRoot="$(AnkiProtoRoot)" GrpcServices="None" Access="Public" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Whichever native library the current platform produced -->
+    <RslibLibrary Include="$(RslibOutput)\ankit_rslib.dll" Condition="Exists('$(RslibOutput)\ankit_rslib.dll')" />
+    <RslibLibrary Include="$(RslibOutput)\libankit_rslib.so" Condition="Exists('$(RslibOutput)\libankit_rslib.so')" />
+    <RslibLibrary Include="$(RslibOutput)\libankit_rslib.dylib" Condition="Exists('$(RslibOutput)\libankit_rslib.dylib')" />
+    <None Include="@(RslibLibrary)" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
+  <Target Name="WarnMissingRslib" BeforeTargets="Build" Condition="'@(RslibLibrary)' == ''">
+    <Warning Text="ankit_rslib native library not found in $(RslibOutput), run the Build-Rslib target" />
+  </Target>
+
+  <ItemGroup>
+    <None Include="paket.references" />
+  </ItemGroup>
 
   <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>

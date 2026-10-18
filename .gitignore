@@ -8,3 +8,4 @@ rslib/
 coverage-results/
 *.user
 .idea
+/Ankit.Native/Generated/

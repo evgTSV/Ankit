@@ -1,0 +1,3 @@
+[toolchain]
+# Keep in sync with paket-files/anki/ankitects/anki/rust-toolchain.toml
+channel = "1.97.1"

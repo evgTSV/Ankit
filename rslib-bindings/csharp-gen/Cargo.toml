@@ -1,0 +1,14 @@
+[package]
+name = "csharp-gen"
+version = "1.0.0"
+authors = ["EvgTsv"]
+edition = "2021"
+rust-version = "1.80"
+license = "AGPL-3.0-or-later"
+publish = false
+description = "Generates the typed C# rslib client of Ankit.Native from Anki's descriptor set"
+
+[dependencies]
+anki_proto_gen = { path = "../../paket-files/anki/ankitects/anki/rslib/proto_gen" }
+anyhow = "1.0.98"
+prost-reflect = "0.14.7"

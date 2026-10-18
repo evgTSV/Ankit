@@ -5,6 +5,13 @@ GROUP Anki
 GITHUB
   remote: ankitects/anki
     FULLPROJECT (29bb700b951e3f0c0cb69b77c0180fc1fe33e6ba)
+GROUP Native
+RESTRICTION: == net10.0
+NUGET
+  remote: https://api.nuget.org/v3/index.json
+    Google.Protobuf (3.36.2)
+    Grpc.Tools (2.84)
+
 GROUP Test
 RESTRICTION: == net10.0
 NUGET
