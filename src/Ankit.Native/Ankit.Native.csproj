@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <AnkiProtoRoot>..\paket-files\anki\ankitects\anki\proto</AnkiProtoRoot>
+    <AnkiProtoRoot>..\..\paket-files\anki\ankitects\anki\proto</AnkiProtoRoot>
     <!-- Cargo profile built by the Build-Rslib target for this configuration -->
     <RslibProfile Condition="'$(Configuration)' == 'Release'">release</RslibProfile>
     <RslibProfile Condition="'$(RslibProfile)' == ''">debug</RslibProfile>
@@ -37,5 +37,5 @@
     <None Include="paket.references" />
   </ItemGroup>
 
-  <Import Project="..\.paket\Paket.Restore.targets" />
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

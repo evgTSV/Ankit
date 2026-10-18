@@ -7,7 +7,7 @@
 ### Prerequisites
 
 - [.NET SDK 10.0](https://dotnet.microsoft.com/download) (see `global.json`)
-- [Rust](https://rustup.rs) 1.97.1 for the rslib bindings (see `rslib-bindings/rust-toolchain.toml`), and on Windows
+- [Rust](https://rustup.rs) 1.97.1 for the rslib bindings (see `src/rslib-bindings/rust-toolchain.toml`), and on Windows
   the MSVC build tools
 
 Local tools (Paket, Fantomas) are restored automatically by the `Restore` target.
@@ -66,10 +66,10 @@ dotnet tool install -g dotnet-reportgenerator-globaltool
 reportgenerator -reports:coverage-results/**/coverage.cobertura.xml -targetdir:coverage-report -reporttypes:Html
 ```
 
-See [`rslib-bindings/README.md`](rslib-bindings/README.md) for the native bridge between `Ankit.Native` and rslib.
+See [`src/rslib-bindings/README.md`](src/rslib-bindings/README.md) for the native bridge between `Ankit.Native` and rslib.
 
 After cloning, run `./build Setup-Rslib` and `./build Build-Rslib` once before building the solution in an IDE: they
-build the native library and generate the typed C# rslib client (`Ankit.Native/Generated`), which is not committed.
+build the native library and generate the typed C# rslib client (`src/Ankit.Native/Generated`), which is not committed.
 
 ## License
 

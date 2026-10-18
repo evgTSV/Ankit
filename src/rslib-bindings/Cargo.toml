@@ -18,11 +18,11 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # Anki sources are restored by Paket (group Anki) into paket-files
-anki = { path = "../paket-files/anki/ankitects/anki/rslib" }
-anki_proto = { path = "../paket-files/anki/ankitects/anki/rslib/proto" }
+anki = { path = "../../paket-files/anki/ankitects/anki/rslib" }
+anki_proto = { path = "../../paket-files/anki/ankitects/anki/rslib/proto" }
 
 [dev-dependencies]
-anki_proto_gen = { path = "../paket-files/anki/ankitects/anki/rslib/proto_gen" }
+anki_proto_gen = { path = "../../paket-files/anki/ankitects/anki/rslib/proto_gen" }
 prost = "0.13"
 prost-reflect = "0.14.7"
 

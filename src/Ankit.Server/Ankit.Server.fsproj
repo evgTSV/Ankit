@@ -11,12 +11,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\.dockerignore">
+    <Content Include="..\..\.dockerignore">
       <Link>.dockerignore</Link>
     </Content>
     <Content Include="Dockerfile" />
     <Content Include="paket.references" />
   </ItemGroup>
 
-  <Import Project="..\.paket\Paket.Restore.targets" />
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

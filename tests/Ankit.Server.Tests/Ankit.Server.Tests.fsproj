@@ -10,8 +10,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Ankit.Server\Ankit.Server.fsproj" />
+    <ProjectReference Include="..\..\src\Ankit.Server\Ankit.Server.fsproj" />
   </ItemGroup>
 
-  <Import Project="..\.paket\Paket.Restore.targets" />
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

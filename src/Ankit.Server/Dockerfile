@@ -5,10 +5,10 @@ WORKDIR /app
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["Ankit.Server/Ankit.Server.fsproj", "Ankit.Server/"]
-RUN dotnet restore "Ankit.Server/Ankit.Server.fsproj"
+COPY ["src/Ankit.Server/Ankit.Server.fsproj", "src/Ankit.Server/"]
+RUN dotnet restore "src/Ankit.Server/Ankit.Server.fsproj"
 COPY . .
-WORKDIR "/src/Ankit.Server"
+WORKDIR "/src/src/Ankit.Server"
 RUN dotnet build "./Ankit.Server.fsproj" -c $BUILD_CONFIGURATION -o /app/build
 
 FROM build AS publish

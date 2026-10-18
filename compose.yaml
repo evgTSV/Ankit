@@ -3,6 +3,6 @@ services:
     image: ankit.server
     build:
       context: .
-      dockerfile: Ankit.Server/Dockerfile
+      dockerfile: src/Ankit.Server/Dockerfile
     ports:
       - "5000:5000"

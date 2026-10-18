@@ -12,12 +12,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Ankit.Native\Ankit.Native.csproj" />
+    <ProjectReference Include="..\..\src\Ankit.Native\Ankit.Native.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="paket.references" />
   </ItemGroup>
 
-  <Import Project="..\.paket\Paket.Restore.targets" />
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

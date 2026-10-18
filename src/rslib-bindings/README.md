@@ -55,7 +55,7 @@ backend.CloseCollection(new CloseCollectionRequest());
 Errors reported by rslib are thrown as `BackendException`, with the decoded `BackendError` in `Error`; panics and
 invalid calls as `RslibException`.
 
-Those methods live in `Ankit.Native/Generated/RslibBackend.Methods.g.cs`. The file is not committed: its service and
+Those methods live in `src/Ankit.Native/Generated/RslibBackend.Methods.g.cs`. The file is not committed: its service and
 method indices must match the linked rslib, so it is generated from the descriptor set of the same build. Run
 `Build-Rslib` once after cloning, and again whenever the Anki version changes, before building the solution in an
 IDE; until then `Ankit.Native` does not compile. The FAKE `Build` target does this on its own. To regenerate the
@@ -89,6 +89,6 @@ After setup, plain `cargo build` / `cargo test` in this folder work too.
 
 ## License
 
-AGPL-3.0-or-later, like the rest of Ankit (see the repository [`README.md`](../README.md#license) and
-[`LICENSE`](../LICENSE)). This is required rather than chosen: the compiled `ankit_rslib` library statically links
+AGPL-3.0-or-later, like the rest of Ankit (see the repository [`README.md`](../../README.md#license) and
+[`LICENSE`](../../LICENSE)). This is required rather than chosen: the compiled `ankit_rslib` library statically links
 Anki's rslib, which is licensed under AGPL-3.0-or-later.

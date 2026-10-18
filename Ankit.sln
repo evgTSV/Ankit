@@ -1,17 +1,25 @@
 
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Ankit.Server", "Ankit.Server\Ankit.Server.fsproj", "{92975ADC-6C93-4E3A-A5D9-8D4A80CF791D}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Ankit.Server", "src\Ankit.Server\Ankit.Server.fsproj", "{92975ADC-6C93-4E3A-A5D9-8D4A80CF791D}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{DC8F8374-3F99-4905-A863-63A74640C5EB}"
 	ProjectSection(SolutionItems) = preProject
 		compose.yaml = compose.yaml
+		global.json = global.json
+		paket.dependencies = paket.dependencies
+		README.md = README.md
+		Scriptsuild.fsx = Scriptsuild.fsx
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ankit.Native", "Ankit.Native\Ankit.Native.csproj", "{452916EC-79B6-4C8B-8528-369D929FD39B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ankit.Native", "src\Ankit.Native\Ankit.Native.csproj", "{452916EC-79B6-4C8B-8528-369D929FD39B}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Ankit.Server.Tests", "Ankit.Server.Tests\Ankit.Server.Tests.fsproj", "{557188DD-5C92-41E0-8CF9-483A0E7FB262}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Ankit.Server.Tests", "tests\Ankit.Server.Tests\Ankit.Server.Tests.fsproj", "{557188DD-5C92-41E0-8CF9-483A0E7FB262}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ankit.Native.Tests", "Ankit.Native.Tests\Ankit.Native.Tests.csproj", "{D700CC17-7BC7-41FB-9C78-787113334F51}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ankit.Native.Tests", "tests\Ankit.Native.Tests\Ankit.Native.Tests.csproj", "{D700CC17-7BC7-41FB-9C78-787113334F51}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{6F1B5E0A-3C2D-4E8B-9A71-2D5C8E4F1A01}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{6F1B5E0A-3C2D-4E8B-9A71-2D5C8E4F1A02}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -74,5 +82,11 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{92975ADC-6C93-4E3A-A5D9-8D4A80CF791D} = {6F1B5E0A-3C2D-4E8B-9A71-2D5C8E4F1A01}
+		{452916EC-79B6-4C8B-8528-369D929FD39B} = {6F1B5E0A-3C2D-4E8B-9A71-2D5C8E4F1A01}
+		{557188DD-5C92-41E0-8CF9-483A0E7FB262} = {6F1B5E0A-3C2D-4E8B-9A71-2D5C8E4F1A02}
+		{D700CC17-7BC7-41FB-9C78-787113334F51} = {6F1B5E0A-3C2D-4E8B-9A71-2D5C8E4F1A02}
 	EndGlobalSection
 EndGlobal

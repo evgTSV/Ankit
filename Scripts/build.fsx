@@ -31,7 +31,7 @@ let isCI = Environment.GetEnvironmentVariable("CI") <> null
 
 let root = Path.GetFullPath(__SOURCE_DIRECTORY__ + "/..")
 let solution = root + "/Ankit.sln"
-let rslibBindings = root + "/rslib-bindings"
+let rslibBindings = root + "/src/rslib-bindings"
 let ankiSources = root + "/paket-files/anki/ankitects/anki"
 let usage =
     """
@@ -333,7 +333,7 @@ Target.create "Setup-Rslib" (fun _ ->
     }
     |> handleResult "Setup-Rslib")
 
-let csharpClient = root + "/Ankit.Native/Generated/RslibBackend.Methods.g.cs"
+let csharpClient = root + "/src/Ankit.Native/Generated/RslibBackend.Methods.g.cs"
 
 Target.create "Build-Rslib" (fun _ ->
     result {
