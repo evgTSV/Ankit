@@ -1,0 +1,10 @@
+bin/
+obj/
+/packages/
+riderModule.iml
+/_ReSharper.Caches/
+paket-files/
+rslib/
+coverage-results/
+*.user
+.idea

@@ -1,0 +1,52 @@
+
+
+GROUP Anki
+
+GITHUB
+  remote: ankitects/anki
+    FULLPROJECT (29bb700b951e3f0c0cb69b77c0180fc1fe33e6ba)
+GROUP Test
+RESTRICTION: == net10.0
+NUGET
+  remote: https://api.nuget.org/v3/index.json
+    coverlet.collector (10.1)
+    FSharp.Core (10.1.402)
+    Microsoft.CodeCoverage (18.11)
+    Microsoft.NET.Test.Sdk (18.11)
+      Microsoft.CodeCoverage (>= 18.11)
+      Microsoft.TestPlatform.TestHost (>= 18.11)
+    Microsoft.TestPlatform.ObjectModel (18.11)
+    Microsoft.TestPlatform.TestHost (18.11)
+      Microsoft.TestPlatform.ObjectModel (>= 18.11)
+    xunit (2.9.3)
+      xunit.analyzers (>= 1.18)
+      xunit.assert (>= 2.9.3)
+      xunit.core (2.9.3)
+    xunit.abstractions (2.0.3)
+    xunit.analyzers (2.2)
+    xunit.assert (2.9.3)
+    xunit.core (2.9.3)
+      xunit.extensibility.core (2.9.3)
+      xunit.extensibility.execution (2.9.3)
+    xunit.extensibility.core (2.9.3)
+      xunit.abstractions (>= 2.0.3)
+    xunit.extensibility.execution (2.9.3)
+      xunit.extensibility.core (2.9.3)
+    xunit.runner.visualstudio (4.0.1)
+
+GROUP WebServer
+RESTRICTION: == net10.0
+NUGET
+  remote: https://api.nuget.org/v3/index.json
+    FSharp.Core (10.1.402)
+    Microsoft.Extensions.ObjectPool (10.0.13)
+    Microsoft.IO.RecyclableMemoryStream (3.0.1)
+    Oxpecker (2.1.1)
+      Microsoft.IO.RecyclableMemoryStream (>= 3.0.1)
+      Oxpecker.ViewEngine (>= 2.1)
+      TypeShape (>= 10.0)
+    Oxpecker.ViewEngine (2.1)
+      FSharp.Core (>= 10.0.100)
+      Microsoft.Extensions.ObjectPool (>= 10.0)
+    TypeShape (10.0)
+      FSharp.Core (>= 4.5.4)

@@ -1,0 +1,19 @@
+# Build output
+bin/
+obj/
+
+# Dependencies
+packages/
+paket-files/
+.paket/
+
+# IDE
+.idea/
+.vs/
+
+# Generated files
+**/AssemblyInfo.fs
+**/*.AssemblyInfo.fs
+
+# Script files
+**/*.fsx
