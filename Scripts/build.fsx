@@ -326,12 +326,9 @@ Target.create "Setup-Rslib" (fun _ ->
         if not (Directory.Exists ankiSources) then
             return! Error [ $"Anki sources not found at %s{relative ankiSources}, run the Restore target" ]
 
-        // GitHub archives restored by Paket do not contain git submodules. rslib only needs the
-        // translation folders to exist, so without them it is built with the English strings only
         for folder in [ "ftl/core-repo/core"; "ftl/qt-repo/desktop" ] do
             Directory.CreateDirectory(Path.Combine(ankiSources, folder)) |> ignore
 
-        // Copied on every run, so that a Grpc.Tools update reaches the Rust build as well
         do! copyProtoc ()
     }
     |> handleResult "Setup-Rslib")
@@ -357,11 +354,12 @@ Target.create "Prepare-Sources" doNothing
     "Build-Rslib"
 ]
 
-// Soft dependency, so the Rust targets can be run on their own once Paket has restored the Anki sources
 "Restore" ?=> "Setup-Rslib"
 
 "Setup-Rslib"
-    ==> "Build"
+    ==> "Build-Rslib"
+
+"Build"
     ==> "Test-Rslib"
     ==> "Test"
     ==> "All"

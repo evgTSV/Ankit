@@ -12,6 +12,7 @@
 use std::env;
 use std::fmt::Write;
 use std::fs;
+use std::path::Path;
 
 use anki_proto_gen::get_services;
 use anki_proto_gen::BackendService;
@@ -52,6 +53,11 @@ fn main() -> Result<()> {
 
     // Only touch the file when it changes, to keep MSBuild incremental builds intact
     if fs::read_to_string(&output).ok().as_deref() != Some(out.as_str()) {
+        // The output folder is not committed, so it is missing after a fresh clone
+        if let Some(parent) = Path::new(&output).parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("cannot create {}", parent.display()))?;
+        }
         fs::write(&output, out).with_context(|| format!("cannot write {output}"))?;
     }
     Ok(())
