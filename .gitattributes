@@ -11,3 +11,6 @@
 *.exe binary
 *.nupkg binary
 *.snk binary
+
+# Windows scripts need CRLF
+*.cmd text eol=crlf

@@ -76,7 +76,7 @@ let parallelJobs =
 
 let targetName =
     DocoptResult.tryGetArgument "<target>" cli
-    |> Option.defaultValue "Test"
+    |> Option.defaultValue "All"
 
 // Docopt does not reject unknown options, they end up as the positional target
 if targetName.StartsWith "-" then
