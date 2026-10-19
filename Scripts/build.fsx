@@ -30,9 +30,9 @@ let version = Version(1, 0, 0, 0)
 let isCI = Environment.GetEnvironmentVariable("CI") <> null
 
 let root = Path.GetFullPath(__SOURCE_DIRECTORY__ + "/..")
-let solution = root + "/Ankit.sln"
-let rslibBindings = root + "/src/rslib-bindings"
-let ankiSources = root + "/paket-files/anki/ankitects/anki"
+let solution = Path.combine root "Ankit.sln"
+let rslibBindings = Path.combine root "src/rslib-bindings"
+let ankiSources = Path.combine root "paket-files/anki/ankitects/anki"
 let usage =
     """
 Usage:
@@ -43,8 +43,9 @@ Usage:
 Options:
   -c, --configuration <name>  Build configuration: Debug or Release (default: Release).
   -p, --parallel <jobs>       Number of targets to run in parallel (default: 1).
-  --list                      List available targets.
+  -f, --full-clean            Perform removing files left after build process.
   -h, --help                  Show this help.
+  --list                      List available targets.
   --no-logo                   Do not display the logo.
 """
 
@@ -227,13 +228,25 @@ Target.create "Remove-BOM" (fun _ ->
             return! Error errors else return ()
     } |> handleResult "Remove-BOM")
 
+let isFullCleanTriggered = DocoptResult.hasFlag "--full-clean" cli
+
 Target.create "Clean" (fun _ ->
     !! "src/**/bin"
     ++ "tests/**/bin"
     ++ "src/**/obj"
     ++ "tests/**/obj"
-    -- "src/rslib-bindings/**"
-    |> Shell.cleanDirs)
+    |> Shell.cleanDirs
+
+    if isFullCleanTriggered then
+        Trace.log "Full clean triggered, removing build artifacts"
+        !! "packages"
+        ++ "Generated"
+        ++ "paket-files"
+        ++ "coverage-results"
+        ++ "src/rslib-bindings/target"
+        ++ "src/rslib-bindings/tools"
+        ++ "src/rslib-bindings/include"
+        |> Shell.cleanDirs)
 
 Target.create "Test" (fun _ ->
     DotNet.test
