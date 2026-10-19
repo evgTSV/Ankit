@@ -34,7 +34,7 @@ Without a target, `All` is run.
 Examples:
 
 ```bash
-./build                  # prepare, build, test and run everything in Release
+./build                  # prepare, build and test everything in Release
 ./build Prepare          # restore packages and generate sources, once after cloning
 ./build -c Debug Build   # build in Debug
 ./build Run              # start the server in Docker
@@ -44,8 +44,8 @@ Examples:
 
 ### Pipeline
 
-The pipeline has three stages, each a target of its own. `All` runs them in order; `Prepare-Sources` is not part of
-it.
+The pipeline has three stages, each a target of its own. `All` runs the first two in order; `Run` and
+`Prepare-Sources` are not part of it.
 
 1. **`Prepare`** restores packages and tools and generates sources that are not committed: the typed C# rslib client
    (`src/Ankit.Native/Generated`) and the C header of the native library (`src/rslib-bindings/include/ankit_rslib.h`).
@@ -53,7 +53,7 @@ it.
 2. **`Build`** compiles the native rslib bindings and the solution; `Test` and `Test-Rslib` run the tests. Build
    targets do not run `Prepare` on their own, they fail with a hint to run it if its outputs are missing.
 3. **`Run`** builds the `Ankit.Server` Docker image and starts it in the background with Docker Compose
-   (`compose.yaml`); `Stop` stops it.
+   (`compose.yaml`); `Stop` stops it. Run it explicitly with `./build Run`.
 
 To build the solution in an IDE, run `./build Prepare` and `./build Build-Rslib` first: the former generates the C#
 client, without which `Ankit.Native` does not compile, the latter builds the native library its tests load.
@@ -77,10 +77,10 @@ client, without which `Ankit.Native` does not compile, the latter builds the nat
 | `Test-Rslib`            | Run the rslib bindings tests                                      | `Build-Rslib`                      |
 | `Coverage`              | Run tests with code coverage, results go to `coverage-results/`  |                                    |
 | **Run**                 |                                                                   |                                    |
-| `Run`                   | Build the server image and start it with Docker Compose           | (after `Test`, `Test-Rslib`)       |
+| `Run`                   | Build the server image and start it with Docker Compose           |                                    |
 | `Stop`                  | Stop the server started by `Run`                                  |                                    |
 | **Other**               |                                                                   |                                    |
-| `All`                   | Run all stages                                                    | `Prepare`, `Build`, `Test`, `Test-Rslib`, `Run` |
+| `All`                   | Prepare, build and test everything                                | `Prepare`, `Build`, `Test`, `Test-Rslib` |
 | `Info`                  | Print project and build information                               |                                    |
 | `Format`                | Format sources with Fantomas                                      | `Restore`                          |
 | `Verify-Encoding`       | Check that all repository files are UTF-8 without BOM             |                                    |

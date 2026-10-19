@@ -232,7 +232,6 @@ Target.create "Clean" (fun _ ->
     ++ "tests/**/bin"
     ++ "src/**/obj"
     ++ "tests/**/obj"
-    // tools/protoc/bin is provided by Prepare, cargo cleans its own target folder
     -- "src/rslib-bindings/**"
     |> Shell.cleanDirs)
 
@@ -328,7 +327,6 @@ Target.create "Setup-Rslib" (fun _ ->
 
 let csharpClient = root + "/src/Ankit.Native/Generated/RslibBackend.Methods.g.cs"
 
-// Building anki_proto alone is enough for its build script to write the descriptor set the client is generated from
 Target.create "Generate-Rslib-Client" (fun _ ->
     result {
         do! cargo ([ "build"; "--locked"; "-p"; "anki_proto" ] @ cargoProfile)
@@ -338,12 +336,10 @@ Target.create "Generate-Rslib-Client" (fun _ ->
 
 let cHeader = rslibBindings + "/include/ankit_rslib.h"
 
-// Nothing in the solution consumes the header, it documents the C ABI for other callers
 Target.create "Generate-Rslib-Header" (fun _ ->
     cargo [ "run"; "--locked"; "--quiet"; "-p"; "header-gen"; "--"; cHeader ]
     |> handleResult "Generate-Rslib-Header")
 
-// Stages after Prepare only check for its outputs, so they can be run on their own
 let requirePrepared (target: string) (path: string) =
     if not (File.Exists path) then
         failwithf $"%s{target}: %s{relative path} not found, run the Prepare target"
@@ -375,7 +371,6 @@ let dockerCompose (args: string list) =
         let command = String.concat " " args
         if r.ExitCode = 0 then Ok() else Error [ $"docker compose %s{command} failed" ]
 
-// Detached, so that All finishes; the image is built from the sources by the Dockerfile
 Target.create "Run" (fun _ ->
     dockerCompose [ "up"; "--build"; "--detach" ] |> handleResult "Run")
 
@@ -419,17 +414,11 @@ Target.create "Prepare-Sources" doNothing
 "Build-Rslib"
     ==> "Test-Rslib"
 
-// --- Run: the server in Docker ---
-
-"Test" ?=> "Run"
-"Test-Rslib" ?=> "Run"
-
 "All" <== [
     "Prepare"
     "Build"
     "Test"
     "Test-Rslib"
-    "Run"
 ]
 
 "Restore"
