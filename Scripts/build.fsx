@@ -33,6 +33,8 @@ let root = Path.GetFullPath(__SOURCE_DIRECTORY__ + "/..")
 let solution = Path.combine root "Ankit.sln"
 let rslibBindings = Path.combine root "src/rslib-bindings"
 let ankiSources = Path.combine root "paket-files/anki/ankitects/anki"
+let scripts = __SOURCE_DIRECTORY__
+
 let usage =
     """
 Usage:
@@ -228,6 +230,16 @@ Target.create "Remove-BOM" (fun _ ->
             return! Error errors else return ()
     } |> handleResult "Remove-BOM")
 
+let genWorkflowScript = Path.combine scripts "gen-workflow.fsx"
+
+Target.create "Verify-Workflow" (fun _ ->
+    dotnet "fsi" $"{genWorkflowScript} verify"
+    |> handleResult "VerifyWorkflow")
+
+Target.create "Gen-Workflow" (fun _ ->
+    dotnet "fsi" $"{genWorkflowScript}"
+    |> handleResult "GenWorkflow")
+
 let isFullCleanTriggered = DocoptResult.hasFlag "--full-clean" cli
 
 Target.create "Clean" (fun _ ->
@@ -296,7 +308,7 @@ let grpcToolsProtoc =
     let exe = if RuntimeInformation.IsOSPlatform OSPlatform.Windows then "protoc.exe" else "protoc"
     Path.Combine(root, "packages", "native", "Grpc.Tools", "tools", platform, exe)
 
-let protocDir = rslibBindings + "/tools/protoc"
+let protocDir = Path.combine rslibBindings "tools/protoc"
 
 // Copied to the stable path .cargo/config.toml points PROTOC at, so plain cargo commands work too
 let copyProtoc () =
@@ -338,7 +350,7 @@ Target.create "Setup-Rslib" (fun _ ->
     }
     |> handleResult "Setup-Rslib")
 
-let csharpClient = root + "/src/Ankit.Native/Generated/RslibBackend.Methods.g.cs"
+let csharpClient = Path.combine root "src/Ankit.Native/Generated/RslibBackend.Methods.g.cs"
 
 Target.create "Generate-Rslib-Client" (fun _ ->
     result {
@@ -347,7 +359,7 @@ Target.create "Generate-Rslib-Client" (fun _ ->
     }
     |> handleResult "Generate-Rslib-Client")
 
-let cHeader = rslibBindings + "/include/ankit_rslib.h"
+let cHeader = Path.combine rslibBindings "include/ankit_rslib.h"
 
 Target.create "Generate-Rslib-Header" (fun _ ->
     cargo [ "run"; "--locked"; "--quiet"; "-p"; "header-gen"; "--"; cHeader ]
@@ -393,6 +405,7 @@ Target.create "Prepare" doNothing
 Target.create "Build" doNothing
 Target.create "All" doNothing
 Target.create "Prepare-Sources" doNothing
+Target.create "Before-Push" doNothing
 
 // --- Prepare: restore packages and tools, generate sources ---
 
@@ -442,6 +455,13 @@ Target.create "Prepare-Sources" doNothing
 
 "Format"
     ==> "Prepare-Sources"
+
+"Before-Push" <== [
+    "Prepare-Sources"
+    "Verify-Encoding"
+    "Verify-Workflow"
+    "Test"
+]
 
 if DocoptResult.hasFlag "--list" cli then
     Target.listAvailable()

@@ -28,7 +28,9 @@ Without a target, `All` is run.
 |------------------------------|--------------------------------------------------------|
 | `-c, --configuration <name>` | Build configuration: `Debug` or `Release` (default: `Release`) |
 | `-p, --parallel <jobs>`      | Number of targets to run in parallel (default: `1`)    |
+| `-f, --full-clean`           | Make `Clean` also remove restored and generated files (see [Targets](#targets)) |
 | `--list`                     | List available targets                                 |
+| `--no-logo`                  | Do not print the project name and version on start     |
 | `-h, --help`                 | Show help                                              |
 
 Examples:
@@ -39,13 +41,15 @@ Examples:
 ./build -c Debug Build   # build in Debug
 ./build Run              # start the server in Docker
 ./build Prepare-Sources  # format sources and fix encodings before committing
+./build Before-Push      # format, verify and test before pushing
+./build -f Clean         # remove everything the build left behind, then run Prepare again
 ./build --list           # list targets
 ```
 
 ### Pipeline
 
-The pipeline has three stages, each a target of its own. `All` runs the first two in order; `Run` and
-`Prepare-Sources` are not part of it.
+The pipeline has three stages, each a target of its own. `All` runs the first two in order; `Run`,
+`Prepare-Sources` and `Before-Push` are not part of it.
 
 1. **`Prepare`** restores packages and tools and generates sources that are not committed: the typed C# rslib client
    (`src/Ankit.Native/Generated`) and the C header of the native library (`src/rslib-bindings/include/ankit_rslib.h`).
@@ -69,7 +73,7 @@ client, without which `Ankit.Native` does not compile, the latter builds the nat
 | `Generate-Rslib-Header` | Generate the C header of the rslib bindings with cbindgen         | (after `Restore`)                  |
 | `Prepare`               | Run all of the above                                              | all of the above                   |
 | **Build**               |                                                                   |                                    |
-| `Clean`                 | Remove `bin` and `obj` directories                                | (after `Prepare`)                  |
+| `Clean`                 | Remove `bin` and `obj` directories; with `--full-clean`, also the outputs of Prepare and coverage results | (after `Prepare`) |
 | `Build-Rslib`           | Build the native rslib bindings                                   | (after `Prepare`)                  |
 | `Build-Solution`        | Build the solution                                                | (after `Clean`)                    |
 | `Build`                 | Clean and build everything                                        | `Clean`, `Build-Rslib`, `Build-Solution` |
@@ -86,8 +90,16 @@ client, without which `Ankit.Native` does not compile, the latter builds the nat
 | `Verify-Encoding`       | Check that all repository files are UTF-8 without BOM             |                                    |
 | `Remove-BOM`            | Strip UTF-8 BOM from repository files                             |                                    |
 | `Prepare-Sources`       | Format sources and remove BOMs                                    | `Format`, `Remove-BOM` (only if any file has a BOM) |
+| `Gen-Workflow`          | Generate the CI workflow with `Scripts/gen-workflow.fsx`          |                                    |
+| `Verify-Workflow`       | Check that the CI workflow is up to date with `Scripts/gen-workflow.fsx` |                             |
+| `Before-Push`           | Format, verify and test before pushing                            | `Prepare-Sources`, `Verify-Encoding`, `Verify-Workflow`, `Test` |
 
 "(after X)" only orders the targets when both run, it does not run X.
+
+`./build -f Clean` additionally removes `packages`, `paket-files`, `coverage-results` and, in `src/rslib-bindings`,
+`target`, `tools` and `include`: everything Restore and Prepare produce. Run `./build Prepare` afterwards.
+
+`Before-Push` runs `Test`, and with it `Build`, but not `Prepare`: run `Prepare` first on a fresh clone.
 
 To get an HTML coverage report, install ReportGenerator and run it on the results:
 
