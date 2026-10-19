@@ -34,30 +34,60 @@ Without a target, `All` is run.
 Examples:
 
 ```bash
-./build                  # restore, clean, build and test in Release
+./build                  # prepare, build, test and run everything in Release
+./build Prepare          # restore packages and generate sources, once after cloning
 ./build -c Debug Build   # build in Debug
+./build Run              # start the server in Docker
 ./build Prepare-Sources  # format sources and fix encodings before committing
 ./build --list           # list targets
 ```
 
+### Pipeline
+
+The pipeline has three stages, each a target of its own. `All` runs them in order; `Prepare-Sources` is not part of
+it.
+
+1. **`Prepare`** restores packages and tools and generates sources that are not committed: the typed C# rslib client
+   (`src/Ankit.Native/Generated`) and the C header of the native library (`src/rslib-bindings/include/ankit_rslib.h`).
+   Run it once after cloning, and again after restoring a different Anki version or changing the C ABI.
+2. **`Build`** compiles the native rslib bindings and the solution; `Test` and `Test-Rslib` run the tests. Build
+   targets do not run `Prepare` on their own, they fail with a hint to run it if its outputs are missing.
+3. **`Run`** builds the `Ankit.Server` Docker image and starts it in the background with Docker Compose
+   (`compose.yaml`); `Stop` stops it.
+
+To build the solution in an IDE, run `./build Prepare` and `./build Build-Rslib` first: the former generates the C#
+client, without which `Ankit.Native` does not compile, the latter builds the native library its tests load.
+
 ### Targets
 
-| Target            | Description                                                            | Depends on              |
-|-------------------|------------------------------------------------------------------------|-------------------------|
-| `Info`            | Print project and build information                                    |                         |
-| `Restore`         | Restore dotnet tools, Paket and NuGet packages                         |                         |
-| `Clean`           | Remove `bin` and `obj` directories                                     |                         |
-| `Setup-Rslib`     | Provide `protoc` and prepare the Anki sources for building rslib       | (after `Restore`)       |
-| `Build-Rslib`     | Build the native rslib bindings and regenerate the C# client           | `Setup-Rslib`           |
-| `Test-Rslib`      | Run the rslib bindings tests                                           | `Build-Rslib`           |
-| `Build`           | Build the solution                                                     | `Restore`, `Clean`, `Build-Rslib` |
-| `Test`            | Run tests                                                              | `Build`                 |
-| `All`             | Build and test everything                                              | `Test`, `Test-Rslib`    |
-| `Coverage`        | Run tests with code coverage, results go to `coverage-results/`       |                         |
-| `Format`          | Format sources with Fantomas                                           | `Restore`               |
-| `Verify-Encoding` | Check that all repository files are UTF-8 without BOM                  |                         |
-| `Remove-BOM`      | Strip UTF-8 BOM from repository files                                  |                         |
-| `Prepare-Sources` | Format sources and remove BOMs                                         | `Format`, `Remove-BOM` (only if any file has a BOM) |
+| Target                  | Description                                                       | Depends on                         |
+|-------------------------|-------------------------------------------------------------------|------------------------------------|
+| **Prepare**             |                                                                   |                                    |
+| `Restore`               | Restore dotnet tools, Paket and NuGet packages                    |                                    |
+| `Setup-Rslib`           | Provide `protoc` and prepare the Anki sources for building rslib  | (after `Restore`)                  |
+| `Generate-Rslib-Client` | Generate the typed C# rslib client from Anki's descriptor set     | `Setup-Rslib`                      |
+| `Generate-Rslib-Header` | Generate the C header of the rslib bindings with cbindgen         | (after `Restore`)                  |
+| `Prepare`               | Run all of the above                                              | all of the above                   |
+| **Build**               |                                                                   |                                    |
+| `Clean`                 | Remove `bin` and `obj` directories                                | (after `Prepare`)                  |
+| `Build-Rslib`           | Build the native rslib bindings                                   | (after `Prepare`)                  |
+| `Build-Solution`        | Build the solution                                                | (after `Clean`)                    |
+| `Build`                 | Clean and build everything                                        | `Clean`, `Build-Rslib`, `Build-Solution` |
+| `Test`                  | Run tests                                                         | `Build`                            |
+| `Test-Rslib`            | Run the rslib bindings tests                                      | `Build-Rslib`                      |
+| `Coverage`              | Run tests with code coverage, results go to `coverage-results/`  |                                    |
+| **Run**                 |                                                                   |                                    |
+| `Run`                   | Build the server image and start it with Docker Compose           | (after `Test`, `Test-Rslib`)       |
+| `Stop`                  | Stop the server started by `Run`                                  |                                    |
+| **Other**               |                                                                   |                                    |
+| `All`                   | Run all stages                                                    | `Prepare`, `Build`, `Test`, `Test-Rslib`, `Run` |
+| `Info`                  | Print project and build information                               |                                    |
+| `Format`                | Format sources with Fantomas                                      | `Restore`                          |
+| `Verify-Encoding`       | Check that all repository files are UTF-8 without BOM             |                                    |
+| `Remove-BOM`            | Strip UTF-8 BOM from repository files                             |                                    |
+| `Prepare-Sources`       | Format sources and remove BOMs                                    | `Format`, `Remove-BOM` (only if any file has a BOM) |
+
+"(after X)" only orders the targets when both run, it does not run X.
 
 To get an HTML coverage report, install ReportGenerator and run it on the results:
 
@@ -67,9 +97,6 @@ reportgenerator -reports:coverage-results/**/coverage.cobertura.xml -targetdir:c
 ```
 
 See [`src/rslib-bindings/README.md`](src/rslib-bindings/README.md) for the native bridge between `Ankit.Native` and rslib.
-
-After cloning, run `./build Setup-Rslib` and `./build Build-Rslib` once before building the solution in an IDE: they
-build the native library and generate the typed C# rslib client (`src/Ankit.Native/Generated`), which is not committed.
 
 ## License
 

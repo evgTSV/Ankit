@@ -1,0 +1,13 @@
+[package]
+name = "header-gen"
+version = "1.0.0"
+authors = ["EvgTsv"]
+edition = "2021"
+rust-version = "1.80"
+license = "AGPL-3.0-or-later"
+publish = false
+description = "Generates the C header of ankit_rslib with cbindgen"
+
+[dependencies]
+anyhow = "1.0.98"
+cbindgen = { version = "0.29.4", default-features = false }

@@ -10,7 +10,7 @@ description = "C ABI bridge between Ankit.Native and Anki's rslib, speaking prot
 
 # Standalone workspace, so Cargo never tries to attach this crate to the Anki workspace
 [workspace]
-members = ["csharp-gen"]
+members = ["csharp-gen", "header-gen"]
 
 [lib]
 name = "ankit_rslib"

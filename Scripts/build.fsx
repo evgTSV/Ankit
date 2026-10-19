@@ -232,16 +232,9 @@ Target.create "Clean" (fun _ ->
     ++ "tests/**/bin"
     ++ "src/**/obj"
     ++ "tests/**/obj"
+    // tools/protoc/bin is provided by Prepare, cargo cleans its own target folder
+    -- "src/rslib-bindings/**"
     |> Shell.cleanDirs)
-
-Target.create "Build" (fun _ ->
-    DotNet.build
-        (fun p ->
-            { p with
-                Common = dotnetCli p.Common
-                Configuration = configuration
-                MSBuildParams = metadata p.MSBuildParams })
-        solution)
 
 Target.create "Test" (fun _ ->
     DotNet.test
@@ -335,34 +328,109 @@ Target.create "Setup-Rslib" (fun _ ->
 
 let csharpClient = root + "/src/Ankit.Native/Generated/RslibBackend.Methods.g.cs"
 
-Target.create "Build-Rslib" (fun _ ->
+// Building anki_proto alone is enough for its build script to write the descriptor set the client is generated from
+Target.create "Generate-Rslib-Client" (fun _ ->
     result {
-        do! cargo ([ "build"; "--locked" ] @ cargoProfile)
-        // Regenerate the typed C# client from the descriptor set the build has just written
+        do! cargo ([ "build"; "--locked"; "-p"; "anki_proto" ] @ cargoProfile)
         do! cargo [ "run"; "--locked"; "--quiet"; "-p"; "csharp-gen"; "--"; csharpClient ]
     }
-    |> handleResult "Build-Rslib")
+    |> handleResult "Generate-Rslib-Client")
+
+let cHeader = rslibBindings + "/include/ankit_rslib.h"
+
+// Nothing in the solution consumes the header, it documents the C ABI for other callers
+Target.create "Generate-Rslib-Header" (fun _ ->
+    cargo [ "run"; "--locked"; "--quiet"; "-p"; "header-gen"; "--"; cHeader ]
+    |> handleResult "Generate-Rslib-Header")
+
+// Stages after Prepare only check for its outputs, so they can be run on their own
+let requirePrepared (target: string) (path: string) =
+    if not (File.Exists path) then
+        failwithf $"%s{target}: %s{relative path} not found, run the Prepare target"
+
+let protoc = Path.Combine(protocDir, "bin", Path.GetFileName grpcToolsProtoc)
+
+Target.create "Build-Rslib" (fun _ ->
+    requirePrepared "Build-Rslib" protoc
+    cargo ([ "build"; "--locked" ] @ cargoProfile) |> handleResult "Build-Rslib")
+
+Target.create "Build-Solution" (fun _ ->
+    requirePrepared "Build-Solution" csharpClient
+
+    DotNet.build
+        (fun p ->
+            { p with
+                Common = dotnetCli p.Common
+                Configuration = configuration
+                MSBuildParams = metadata p.MSBuildParams })
+        solution)
 
 Target.create "Test-Rslib" (fun _ -> cargo ([ "test"; "--locked" ] @ cargoProfile) |> handleResult "Test-Rslib")
 
+let dockerCompose (args: string list) =
+    CreateProcess.fromRawCommand "docker" ("compose" :: args)
+    |> CreateProcess.withWorkingDirectory root
+    |> Proc.run
+    |> fun r ->
+        let command = String.concat " " args
+        if r.ExitCode = 0 then Ok() else Error [ $"docker compose %s{command} failed" ]
+
+// Detached, so that All finishes; the image is built from the sources by the Dockerfile
+Target.create "Run" (fun _ ->
+    dockerCompose [ "up"; "--build"; "--detach" ] |> handleResult "Run")
+
+Target.create "Stop" (fun _ -> dockerCompose [ "down" ] |> handleResult "Stop")
+
+Target.create "Prepare" doNothing
+Target.create "Build" doNothing
 Target.create "All" doNothing
 Target.create "Prepare-Sources" doNothing
 
-"Build" <== [
+// --- Prepare: restore packages and tools, generate sources ---
+
+"Prepare" <== [
     "Restore"
-    "Clean"
-    "Build-Rslib"
+    "Setup-Rslib"
+    "Generate-Rslib-Client"
+    "Generate-Rslib-Header"
 ]
 
 "Restore" ?=> "Setup-Rslib"
+"Restore" ?=> "Generate-Rslib-Header"
 
 "Setup-Rslib"
-    ==> "Build-Rslib"
+    ==> "Generate-Rslib-Client"
+
+// --- Build: compile and test, from prepared sources ---
+
+"Build" <== [
+    "Clean"
+    "Build-Rslib"
+    "Build-Solution"
+]
+
+"Prepare" ?=> "Clean"
+"Prepare" ?=> "Build-Rslib"
+"Clean" ?=> "Build-Solution"
 
 "Build"
-    ==> "Test-Rslib"
     ==> "Test"
-    ==> "All"
+
+"Build-Rslib"
+    ==> "Test-Rslib"
+
+// --- Run: the server in Docker ---
+
+"Test" ?=> "Run"
+"Test-Rslib" ?=> "Run"
+
+"All" <== [
+    "Prepare"
+    "Build"
+    "Test"
+    "Test-Rslib"
+    "Run"
+]
 
 "Restore"
     ==> "Format"
