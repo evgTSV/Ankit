@@ -27,7 +27,11 @@ let authors = [ "EvgTsv" ]
 let copyright = "Copyright (C) 2026 Evgenii Tsvetkov"
 let version = Version(1, 0, 0, 0)
 
-let isCI = Environment.GetEnvironmentVariable("CI") <> null
+let isCI =
+    Environment.GetEnvironmentVariable("CI")
+    |> Option.ofObj
+    |> Option.map (fun v -> v = "true")
+    |> Option.defaultValue false
 
 let root = Path.GetFullPath(__SOURCE_DIRECTORY__ + "/..")
 let solution = Path.combine root "Ankit.sln"
@@ -46,6 +50,7 @@ Options:
   -c, --configuration <name>  Build configuration: Debug or Release (default: Release).
   -p, --parallel <jobs>       Number of targets to run in parallel (default: 1).
   -f, --full-clean            Perform removing files left after build process.
+  -s, --single-target         Run only the target, without its dependencies.
   -h, --help                  Show this help.
   --list                      List available targets.
   --no-logo                   Do not display the logo.
@@ -250,7 +255,7 @@ Target.create "Clean" (fun _ ->
     |> Shell.cleanDirs
 
     if isFullCleanTriggered then
-        Trace.log "Full clean triggered, removing build artifacts"
+        Trace.log "Full clean triggered, removing all artifacts"
         !! "packages"
         ++ "Generated"
         ++ "paket-files"
@@ -425,7 +430,6 @@ Target.create "Before-Push" doNothing
 // --- Build: compile and test, from prepared sources ---
 
 "Build" <== [
-    "Clean"
     "Build-Rslib"
     "Build-Solution"
 ]
@@ -433,6 +437,7 @@ Target.create "Before-Push" doNothing
 "Prepare" ?=> "Clean"
 "Prepare" ?=> "Build-Rslib"
 "Clean" ?=> "Build-Solution"
+"Clean" ?=> "Build-Rslib"
 
 "Build"
     ==> "Test"
@@ -465,5 +470,8 @@ Target.create "Before-Push" doNothing
 
 if DocoptResult.hasFlag "--list" cli then
     Target.listAvailable()
+elif DocoptResult.hasFlag "--single-target" cli then
+    let result = Target.runSimple targetName []
+    if result.Error.IsSome then exit 1
 else
     Target.run parallelJobs targetName []

@@ -29,6 +29,7 @@ Without a target, `All` is run.
 | `-c, --configuration <name>` | Build configuration: `Debug` or `Release` (default: `Release`) |
 | `-p, --parallel <jobs>`      | Number of targets to run in parallel (default: `1`)    |
 | `-f, --full-clean`           | Make `Clean` also remove restored and generated files (see [Targets](#targets)) |
+| `-s, --single-target`        | Run only the given target, without its dependencies    |
 | `--list`                     | List available targets                                 |
 | `--no-logo`                  | Do not print the project name and version on start     |
 | `-h, --help`                 | Show help                                              |
