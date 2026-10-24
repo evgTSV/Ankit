@@ -43,14 +43,14 @@ let private statusOf (error: AnkiError) =
 let private runCommand (ctx: HttpContext) (cmd: AnkiCommand) : Task =
     task {
         let reply =
-            TaskCompletionSource<Result<unit, AnkiError>>(TaskCreationOptions.RunContinuationsAsynchronously)
+            TaskCompletionSource<Result<obj, AnkiError>>(TaskCreationOptions.RunContinuationsAsynchronously)
 
         let ch = ctx.GetService<Channel<AnkiSyncMsg>>()
         do! ch.Writer.WriteAsync(AnkiSyncMsg(cmd, reply), ctx.RequestAborted)
 
         try
             match! reply.Task.WaitAsync(ctx.RequestAborted) with
-            | Ok() -> ctx.SetStatusCode Status204NoContent
+            | Ok _ -> ctx.SetStatusCode Status204NoContent
             | Error e -> return! writeError ctx (statusOf e) (describe e) None
         with :? TaskCanceledException when not ctx.RequestAborted.IsCancellationRequested ->
             return! writeError ctx Status503ServiceUnavailable "Server is shutting down" None

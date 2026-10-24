@@ -14,9 +14,8 @@ open Xunit
 
 type SyncServiceTests(server: AnkiSyncServer) =
 
-    /// xUnit can't print F# unions, compare the printed values so a failure shows what came back
     let assertResult (expected: SyncResult<unit>) (actual: SyncResult<unit>) =
-        Assert.Equal(sprintf "%A" expected, sprintf "%A" actual)
+        Assert.Equal( $"%A{expected}", $"%A{actual}")
 
     let syncService (backend: RslibBackend) (settings: SyncServerSettings) : ISyncService =
         let monitor = {

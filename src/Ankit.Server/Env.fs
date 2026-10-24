@@ -13,7 +13,10 @@ let tryGetEnvOrDefault (key: string) (defaultValue: string) : string = tryGetEnv
 let AnkitServerSettingsSection = "Ankit"
 
 [<CLIMutable>]
-type AnkitServerSettings = { SyncDebounceTime: int64; CollectionPath: string }
+type AnkitServerSettings = {
+    SyncDebounceTime: int64
+    CollectionPath: string
+}
 
 [<Literal>]
 let SyncServerSettingsSection = "SyncServer"

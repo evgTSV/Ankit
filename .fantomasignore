@@ -15,5 +15,7 @@ paket-files/
 **/AssemblyInfo.fs
 **/*.AssemblyInfo.fs
 
+src/Ankit.Server/Program.fs
+
 # Script files
 **/*.fsx

@@ -22,7 +22,7 @@ type AnkiCommand =
     | AddNote of Anki.Notes.AddNoteRequest
     | FullSync of SyncDirection
 
-type AnkiSyncMsg = AnkiSyncMsg of cmd: AnkiCommand * reply: TaskCompletionSource<Result<unit, AnkiError>>
+type AnkiSyncMsg = AnkiSyncMsg of cmd: AnkiCommand * reply: TaskCompletionSource<Result<obj, AnkiError>>
 
 type AnkiSyncWorker
     (
@@ -37,24 +37,21 @@ type AnkiSyncWorker
     let getDebounceTime () =
         TimeSpan.FromMilliseconds(float settings.CurrentValue.SyncDebounceTime)
 
-    let applyCommand (cmd: AnkiCommand) : Result<unit, AnkiError> =
-        match cmd with
-        | FullSync direction -> syncService.FullSync direction |> Result.mapError AnkiError.FullSyncError
-        | CreateDeck _
-        | AddNote _ ->
-            try
-                match cmd with
-                | CreateDeck deck -> backend.AddDeck deck |> ignore
-                | AddNote noteRequest -> backend.AddNote noteRequest |> ignore
-                | FullSync _ -> ()
+    let applyCommand (cmd: AnkiCommand) : Result<obj, AnkiError> =
+        try
+            match cmd with
+            | FullSync direction ->
+                syncService.FullSync direction
+                |> Result.mapError AnkiError.FullSyncError
+                |> Result.map (fun _ -> box ())
+            | CreateDeck deck -> Ok <| backend.AddDeck deck
+            | AddNote noteRequest -> Ok <| backend.AddNote noteRequest
+        with :? RslibException as e ->
+            logger.LogError(e, "Failed to apply {Command}", cmd)
 
-                Ok()
-            with :? RslibException as e ->
-                logger.LogError(e, "Failed to apply {Command}", cmd)
-
-                match cmd with
-                | CreateDeck _ -> Error AnkiError.CreateDeckError
-                | _ -> Error AnkiError.AddNoteError
+            match cmd with
+            | CreateDeck _ -> Error AnkiError.CreateDeckError
+            | _ -> Error AnkiError.AddNoteError
 
     override this.ExecuteAsync(stoppingToken) =
         task {
@@ -71,8 +68,8 @@ type AnkiSyncWorker
                     let result = applyCommand cmd
 
                     match cmd, result with
-                    | FullSync _, Ok() -> requiresSync.Value <- false
-                    | _, Ok() -> requiresSync.Value <- true
+                    | FullSync _, Ok _ -> requiresSync.Value <- false
+                    | _, Ok _ -> requiresSync.Value <- true
                     | _, Error _ -> ()
 
                     reply.TrySetResult result |> ignore

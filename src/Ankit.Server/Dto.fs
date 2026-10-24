@@ -39,7 +39,11 @@ type FullSyncDto = {
 }
 
 [<CLIMutable>]
-type FieldError = { field: string; issue: string; rejectedValue: obj option }
+type FieldError = {
+    field: string
+    issue: string
+    rejectedValue: obj option
+}
 
 [<CLIMutable>]
 type ValidationError = {

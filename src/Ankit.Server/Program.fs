@@ -17,7 +17,9 @@ open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Options
 
 let endpoints = [
-    GET [ route "/ping" Handlers.ping ]
+    GET [
+        route "/ping" Handlers.ping
+    ]
     POST [
         route "/decks" <| bindOrDeclineJson Handlers.createDeck
         route "/notes" <| bindOrDeclineJson Handlers.addNote
@@ -60,7 +62,11 @@ let configureServices (configuration: IConfiguration) (services: IServiceCollect
     |> ignore
 
 let configureApp (app: IApplicationBuilder) =
-    app.UseRouting().Use(ErrorHandler.errorHandler).UseOxpecker(endpoints).Run(ErrorHandler.notFoundHandler)
+    app
+        .UseRouting()
+        .Use(ErrorHandler.errorHandler)
+        .UseOxpecker(endpoints)
+        .Run(ErrorHandler.notFoundHandler)
 
 let builder = WebApplication.CreateBuilder()
 configureServices builder.Configuration builder.Services

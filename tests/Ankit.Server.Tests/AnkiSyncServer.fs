@@ -51,7 +51,6 @@ type LinuxDockerFactAttribute() as this =
         if not linuxDockerAvailable.Value then
             this.Skip <- "Needs Docker with Linux containers"
 
-/// Parallel rustc jobs for compiling the sync server, more jobs need more memory in the Docker VM
 let private cargoBuildJobs =
     Environment.GetEnvironmentVariable "ANKIT_TESTS_CARGO_JOBS"
     |> Option.ofObj
@@ -110,7 +109,7 @@ type AnkiSyncServer() =
                             .WithWaitStrategy(
                                 Wait
                                     .ForUnixContainer()
-                                    .UntilHttpRequestIsSucceeded(fun r -> r.ForPort(uint16 SyncPort).ForPath("/health"))
+                                    .UntilHttpRequestIsSucceeded(_.ForPort(uint16 SyncPort).ForPath("/health"))
                             )
                             .Build()
 
