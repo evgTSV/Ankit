@@ -23,6 +23,7 @@ let endpoints = [
     POST [
         route "/decks" <| bindOrDeclineJson Handlers.createDeck
         route "/notes" <| bindOrDeclineJson Handlers.addNote
+        route "/sync/full" <| bindOrDeclineJson Handlers.fullSync
     ]
 ]
 

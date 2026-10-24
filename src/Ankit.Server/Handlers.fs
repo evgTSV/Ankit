@@ -34,6 +34,12 @@ let private describe (error: AnkiError) =
     match error with
     | AnkiError.CreateDeckError -> "Failed to create the deck"
     | AnkiError.AddNoteError -> "Failed to add the note, check the deck, the notetype and the number of fields"
+    | AnkiError.FullSyncError failure -> $"Full sync failed: %A{failure}"
+
+let private statusOf (error: AnkiError) =
+    match error with
+    | AnkiError.FullSyncError _ -> Status502BadGateway
+    | _ -> Status422UnprocessableEntity
 
 let private runCommand (ctx: HttpContext) (cmd: AnkiCommand) : Task =
     task {
@@ -43,7 +49,7 @@ let private runCommand (ctx: HttpContext) (cmd: AnkiCommand) : Task =
         try
             match! reply.Task.WaitAsync(ctx.RequestAborted) with
             | Ok () -> ctx.SetStatusCode Status204NoContent
-            | Error e -> return! writeError ctx Status422UnprocessableEntity (describe e) None
+            | Error e -> return! writeError ctx (statusOf e) (describe e) None
         with :? TaskCanceledException when not ctx.RequestAborted.IsCancellationRequested ->
             return! writeError ctx Status503ServiceUnavailable "Server is shutting down" None
     }
@@ -69,8 +75,10 @@ let createDeck (createDeck: CreateDeckDto) : EndpointHandler =
         }
 
 let addNote (addNote: AddNoteDto) : EndpointHandler =
+    let note = toAddNoteRequest addNote
     fun (ctx: HttpContext) ->
-        task {
-            let note = toAddNoteRequest addNote
-            return! runCommand ctx (AddNote note)
-        }
+        runCommand ctx (AddNote note)
+
+let fullSync (fullSync: FullSyncDto) : EndpointHandler =
+    fun (ctx: HttpContext) ->
+        runCommand ctx (FullSync fullSync.Direction)

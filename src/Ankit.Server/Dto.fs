@@ -3,6 +3,7 @@ module Ankit.Server.Dto
 open System
 open System.ComponentModel.DataAnnotations
 open System.Threading.Tasks
+open Ankit.Server.Services
 open Ankit.Server.Utils
 open Microsoft.AspNetCore.Http
 open Microsoft.FSharp.Reflection
@@ -28,6 +29,13 @@ type AddNoteDto = {
     Fields: string array
 
     Tags: string array option
+}
+
+[<CLIMutable>]
+type FullSyncDto = {
+    /// "upload" replaces the server's collection with ours, "download" replaces ours with the server's
+    [<Required(ErrorMessage = "Direction is required")>]
+    Direction: SyncDirection
 }
 
 [<CLIMutable>]

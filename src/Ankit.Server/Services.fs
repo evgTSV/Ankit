@@ -26,9 +26,14 @@ type SyncFailed =
 type SyncResult<'a> = Result<'a, SyncFailed>
 type BackendErrorKind = BackendError.Types.Kind
 
+type SyncDirection =
+    | Upload
+    | Download
+
 [<Interface>]
 type ISyncService =
     abstract TrySync: unit -> SyncResult<unit>
+    abstract FullSync: SyncDirection -> SyncResult<unit>
 
 type AnkiSyncService(backend: RslibBackend, syncServerSettings: IOptionsMonitor<SyncServerSettings>, logger: ILogger<AnkiSyncService>) =
 
@@ -80,6 +85,14 @@ type AnkiSyncService(backend: RslibBackend, syncServerSettings: IOptionsMonitor<
             | required -> return! Error <| SyncFailed.FullSyncRequired required
         }
 
+    let fullSync (auth: SyncAuth) (direction: SyncDirection) : SyncResult<unit> =
+        result {
+            let request = FullUploadOrDownloadRequest(Auth = auth, Upload = (direction = Upload))
+            do! call (fun () -> backend.FullUploadOrDownload request)
+            // rslib skips media without the server's media usn, so it's synced on its own
+            do! call (fun () -> backend.SyncMedia auth)
+        }
+
     let getSyncStatus (auth: SyncAuth) : SyncResult<SyncStatusResponse> =
         call (fun () -> backend.SyncStatus auth)
 
@@ -101,6 +114,16 @@ type AnkiSyncService(backend: RslibBackend, syncServerSettings: IOptionsMonitor<
             result {
                 let! auth = getAuth()
                 let! auth = syncAll auth
+                let! status = getSyncStatus auth
+                logSyncStatus status
+            }
+            |> Result.teeError logFailure
+
+        member this.FullSync(direction) =
+            result {
+                let! auth = getAuth()
+                logger.LogWarning("Starting full {Direction}, the other side's collection is replaced", direction)
+                do! fullSync auth direction
                 let! status = getSyncStatus auth
                 logSyncStatus status
             }
