@@ -177,6 +177,9 @@ Target.create "Restore" (fun _ ->
 Target.create "Format" (fun _ ->
     dotnet "fantomas" "." |> handleResult "Format")
 
+Target.create "Verify-Format" (fun _ ->
+    dotnet "fantomas" "--check ." |> handleResult "Verify-Format")
+
 let utf8Bom = Encoding.UTF8.GetPreamble()
 
 let hasBom (bytes: ReadOnlySpan<byte>) =
@@ -410,6 +413,7 @@ Target.create "Prepare" doNothing
 Target.create "Build" doNothing
 Target.create "All" doNothing
 Target.create "Prepare-Sources" doNothing
+Target.create "Verify-Sources" doNothing
 Target.create "Before-Push" doNothing
 
 // --- Prepare: restore packages and tools, generate sources ---
@@ -455,17 +459,25 @@ Target.create "Before-Push" doNothing
 "Restore"
     ==> "Format"
 
+"Restore"
+    ==> "Verify-Format"
+
 "Remove-BOM"
     =?> ("Prepare-Sources", verifyEncoding() |> Result.isError)
 
 "Format"
     ==> "Prepare-Sources"
 
-"Before-Push" <== [
-    "Prepare-Sources"
+"Verify-Sources" <== [
     "Verify-Encoding"
     "Verify-Workflow"
+    "Verify-Format"
+]
+
+"Before-Push" <== [
     "Test"
+    "Prepare-Sources"
+    "Verify-Sources"
 ]
 
 if DocoptResult.hasFlag "--list" cli then

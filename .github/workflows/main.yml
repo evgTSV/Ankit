@@ -24,10 +24,8 @@ jobs:
       uses: actions/setup-dotnet@v6
       with:
         dotnet-version: 10.0.x
-    - name: Verify encoding
-      run: dotnet fsi Scripts/build.fsx -- --no-logo Verify-Encoding
-    - name: Verify workflow
-      run: dotnet fsi Scripts/build.fsx -- --no-logo Verify-Workflow
+    - name: Verify sources
+      run: dotnet fsi Scripts/build.fsx -- --no-logo Verify-Sources
   build:
     name: Build and test (${{ matrix.image }})
     strategy:

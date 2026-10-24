@@ -1,2 +1,4 @@
 group WebServer
     Oxpecker
+    FsToolkit.ErrorHandling
+    FSharp.SystemTextJson

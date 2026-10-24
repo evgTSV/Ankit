@@ -86,8 +86,7 @@ let workflow = [
             yield! env
             checkoutStep
             setUpDotNetSdkStep
-            buildCliStep "Verify encoding" "Verify-Encoding"
-            buildCliStep "Verify workflow" "Verify-Workflow"
+            buildCliStep "Verify sources" "Verify-Sources"
         ]
 
         job "build" [
