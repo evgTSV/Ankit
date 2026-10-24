@@ -459,6 +459,9 @@ Target.create "Before-Push" doNothing
 "Restore"
     ==> "Format"
 
+"Restore"
+    ==> "Verify-Format"
+
 "Remove-BOM"
     =?> ("Prepare-Sources", verifyEncoding() |> Result.isError)
 
