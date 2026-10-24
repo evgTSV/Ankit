@@ -21,6 +21,7 @@
     <Content Include="..\..\.dockerignore">
       <Link>.dockerignore</Link>
     </Content>
+    <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Dockerfile" />
     <Content Include="paket.references" />
   </ItemGroup>
