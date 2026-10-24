@@ -12,19 +12,14 @@ open type Microsoft.AspNetCore.Http.TypedResults
 open type Microsoft.AspNetCore.Http.StatusCodes
 
 let notFoundHandler: EndpointHandler =
-    fun ctx ->
-        ctx.Write
-        <| NotFound {|
-            message = "Requested method doesn't exist"
-        |}
+    fun ctx -> ctx.Write <| NotFound {| message = "Requested method doesn't exist" |}
 
 let private (|RejectedJsonField|_|) (ex: exn) : string option =
     match ex with
-    | :? JsonException as ex when ex.Message.StartsWith("Missing") ->
-        Some (ex.Message.Split(' ') |> Array.last)
+    | :? JsonException as ex when ex.Message.StartsWith("Missing") -> Some(ex.Message.Split(' ') |> Array.last)
     | :? JsonException as ex when ex.Message.EndsWith("but was null.") ->
         let path = ex.Message.Split(' ') |> Array.head
-        Some (path.Substring(path.LastIndexOf('.') + 1))
+        Some(path.Substring(path.LastIndexOf('.') + 1))
     | _ -> None
 
 let errorHandler (ctx: HttpContext) (next: RequestDelegate) =

@@ -7,17 +7,13 @@ let tryGetEnv (key: string) : string option =
     | null -> None
     | value -> Some value
 
-let tryGetEnvOrDefault (key: string) (defaultValue: string) : string =
-    tryGetEnv key |> Option.defaultValue defaultValue
+let tryGetEnvOrDefault (key: string) (defaultValue: string) : string = tryGetEnv key |> Option.defaultValue defaultValue
 
 [<Literal>]
 let AnkitServerSettingsSection = "Ankit"
 
 [<CLIMutable>]
-type AnkitServerSettings = {
-    SyncDebounceTime: int64
-    CollectionPath: string
-}
+type AnkitServerSettings = { SyncDebounceTime: int64; CollectionPath: string }
 
 [<Literal>]
 let SyncServerSettingsSection = "SyncServer"
@@ -30,11 +26,8 @@ type SyncServerSettings = {
     Username: string
     Password: string
 } with
-    member this.Endpoint =
-        UriBuilder(
-            Host = this.Host,
-            Port = this.Port,
-            Scheme = if this.UseHttps then "https" else "http"
-        ).ToString()
 
-let defaultLangs = ["en"]
+    member this.Endpoint =
+        UriBuilder(Host = this.Host, Port = this.Port, Scheme = if this.UseHttps then "https" else "http").ToString()
+
+let defaultLangs = [ "en" ]

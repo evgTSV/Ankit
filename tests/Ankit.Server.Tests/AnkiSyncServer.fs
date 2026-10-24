@@ -12,9 +12,13 @@ open Xunit
 
 let private repoRoot =
     let rec find (dir: DirectoryInfo) =
-        if isNull dir then failwith "paket.dependencies not found above the test output directory"
-        elif File.Exists(Path.Combine(dir.FullName, "paket.dependencies")) then dir.FullName
-        else find dir.Parent
+        if isNull dir then
+            failwith "paket.dependencies not found above the test output directory"
+        elif File.Exists(Path.Combine(dir.FullName, "paket.dependencies")) then
+            dir.FullName
+        else
+            find dir.Parent
+
     find (DirectoryInfo AppContext.BaseDirectory)
 
 /// The sync server is built from the same Anki tag as the rslib we link against, so the protocol versions match
@@ -25,7 +29,16 @@ let private ankiVersion =
 let private linuxDockerAvailable =
     lazy
         try
-            use docker = Process.Start(ProcessStartInfo("docker", "info --format {{.OSType}}", RedirectStandardOutput = true, RedirectStandardError = true))
+            use docker =
+                Process.Start(
+                    ProcessStartInfo(
+                        "docker",
+                        "info --format {{.OSType}}",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true
+                    )
+                )
+
             let osType = docker.StandardOutput.ReadToEnd().Trim()
             docker.WaitForExit(10_000) && docker.ExitCode = 0 && osType = "linux"
         with _ ->
@@ -33,12 +46,16 @@ let private linuxDockerAvailable =
 
 type LinuxDockerFactAttribute() as this =
     inherit FactAttribute()
+
     do
         if not linuxDockerAvailable.Value then
             this.Skip <- "Needs Docker with Linux containers"
 
 /// Parallel rustc jobs for compiling the sync server, more jobs need more memory in the Docker VM
-let private cargoBuildJobs = Environment.GetEnvironmentVariable "ANKIT_TESTS_CARGO_JOBS" |> Option.ofObj |> Option.defaultValue "4"
+let private cargoBuildJobs =
+    Environment.GetEnvironmentVariable "ANKIT_TESTS_CARGO_JOBS"
+    |> Option.ofObj
+    |> Option.defaultValue "4"
 
 [<Literal>]
 let private SyncPort = 8080
@@ -67,28 +84,41 @@ type AnkiSyncServer() =
                     // Compiling the server takes several minutes the first time, Docker caches the layers after that
                     let image =
                         ImageFromDockerfileBuilder()
-                            .WithDockerfileDirectory(Path.Combine(repoRoot, "tests", "Ankit.Server.Tests", "SyncServer"))
+                            .WithDockerfileDirectory(
+                                Path.Combine(repoRoot, "tests", "Ankit.Server.Tests", "SyncServer")
+                            )
                             .WithDockerfile("Dockerfile")
                             .WithBuildArgument("ANKI_VERSION", ankiVersion)
                             .WithBuildArgument("CARGO_BUILD_JOBS", cargoBuildJobs)
                             .WithName($"ankit-tests/anki-sync-server:{ankiVersion}")
                             .WithCleanUp(false)
                             .Build()
+
                     do! image.CreateAsync()
 
                     let builder =
                         Users
                         |> List.indexed
                         |> List.fold
-                            (fun (b: ContainerBuilder) (i, user) -> b.WithEnvironment($"SYNC_USER{i + 1}", $"{user}:{Password}"))
+                            (fun (b: ContainerBuilder) (i, user) ->
+                                b.WithEnvironment($"SYNC_USER{i + 1}", $"{user}:{Password}"))
                             (ContainerBuilder(image.FullName))
+
                     container <-
                         builder
                             .WithPortBinding(SyncPort, true)
-                            .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(fun r -> r.ForPort(uint16 SyncPort).ForPath("/health")))
+                            .WithWaitStrategy(
+                                Wait
+                                    .ForUnixContainer()
+                                    .UntilHttpRequestIsSucceeded(fun r -> r.ForPort(uint16 SyncPort).ForPath("/health"))
+                            )
                             .Build()
+
                     do! container.StartAsync()
             }
 
         member _.DisposeAsync() =
-            if isNull container then Task.CompletedTask else container.DisposeAsync().AsTask()
+            if isNull container then
+                Task.CompletedTask
+            else
+                container.DisposeAsync().AsTask()

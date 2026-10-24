@@ -17,9 +17,7 @@ open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Options
 
 let endpoints = [
-    GET [
-        route "/ping" Handlers.ping
-    ]
+    GET [ route "/ping" Handlers.ping ]
     POST [
         route "/decks" <| bindOrDeclineJson Handlers.createDeck
         route "/notes" <| bindOrDeclineJson Handlers.addNote
@@ -28,14 +26,22 @@ let endpoints = [
 ]
 
 let openBackend (sp: IServiceProvider) : RslibBackend =
-    let collectionPath = sp.GetRequiredService<IOptions<AnkitServerSettings>>().Value.CollectionPath |> Path.GetFullPath
+    let collectionPath =
+        sp.GetRequiredService<IOptions<AnkitServerSettings>>().Value.CollectionPath
+        |> Path.GetFullPath
+
     Directory.CreateDirectory(Path.GetDirectoryName collectionPath) |> ignore
 
     let backend = RslibBackend.Open defaultLangs
-    backend.OpenCollection(OpenCollectionRequest(
-        CollectionPath = collectionPath,
-        MediaFolderPath = Path.ChangeExtension(collectionPath, ".media"),
-        MediaDbPath = Path.ChangeExtension(collectionPath, ".media.db2")))
+
+    backend.OpenCollection(
+        OpenCollectionRequest(
+            CollectionPath = collectionPath,
+            MediaFolderPath = Path.ChangeExtension(collectionPath, ".media"),
+            MediaDbPath = Path.ChangeExtension(collectionPath, ".media.db2")
+        )
+    )
+
     backend
 
 let configureServices (configuration: IConfiguration) (services: IServiceCollection) =
@@ -46,17 +52,15 @@ let configureServices (configuration: IConfiguration) (services: IServiceCollect
         .AddOxpecker()
         .AddSingleton<IJsonSerializer>(SystemTextJsonSerializer(jsonOptions))
         .AddSingleton<RslibBackend>(openBackend)
-        .AddSingleton<Channel<AnkiSyncMsg>>(Channel.CreateUnbounded<AnkiSyncMsg>(UnboundedChannelOptions(SingleReader = true)))
+        .AddSingleton<Channel<AnkiSyncMsg>>(
+            Channel.CreateUnbounded<AnkiSyncMsg>(UnboundedChannelOptions(SingleReader = true))
+        )
         .AddSingleton<ISyncService, AnkiSyncService>()
         .AddHostedService<AnkiSyncWorker>()
     |> ignore
 
 let configureApp (app: IApplicationBuilder) =
-    app
-        .UseRouting()
-        .Use(ErrorHandler.errorHandler)
-        .UseOxpecker(endpoints)
-        .Run(ErrorHandler.notFoundHandler)
+    app.UseRouting().Use(ErrorHandler.errorHandler).UseOxpecker(endpoints).Run(ErrorHandler.notFoundHandler)
 
 let builder = WebApplication.CreateBuilder()
 configureServices builder.Configuration builder.Services

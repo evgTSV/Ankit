@@ -35,7 +35,8 @@ type ISyncService =
     abstract TrySync: unit -> SyncResult<unit>
     abstract FullSync: SyncDirection -> SyncResult<unit>
 
-type AnkiSyncService(backend: RslibBackend, syncServerSettings: IOptionsMonitor<SyncServerSettings>, logger: ILogger<AnkiSyncService>) =
+type AnkiSyncService
+    (backend: RslibBackend, syncServerSettings: IOptionsMonitor<SyncServerSettings>, logger: ILogger<AnkiSyncService>) =
 
     let classify (error: BackendError) : SyncFailed =
         match error.Kind with
@@ -47,7 +48,7 @@ type AnkiSyncService(backend: RslibBackend, syncServerSettings: IOptionsMonitor<
 
     let call (f: unit -> 'a) : SyncResult<'a> =
         try
-            Ok <| f()
+            Ok <| f ()
         with
         | :? BackendException as e -> Error <| classify e.Error
         | :? RslibException as e -> Error <| SyncFailed.NativeFailed e.Message
@@ -62,11 +63,14 @@ type AnkiSyncService(backend: RslibBackend, syncServerSettings: IOptionsMonitor<
             redirected
         | _ -> auth
 
-    let getAuth() : SyncResult<SyncAuth> =
-        let loginRequest = SyncLoginRequest(
-            Username = syncServerSettings.CurrentValue.Username,
-            Password = syncServerSettings.CurrentValue.Password,
-            Endpoint = syncServerSettings.CurrentValue.Endpoint)
+    let getAuth () : SyncResult<SyncAuth> =
+        let loginRequest =
+            SyncLoginRequest(
+                Username = syncServerSettings.CurrentValue.Username,
+                Password = syncServerSettings.CurrentValue.Password,
+                Endpoint = syncServerSettings.CurrentValue.Endpoint
+            )
+
         call (fun () -> backend.SyncLogin loginRequest)
 
     let syncAll (auth: SyncAuth) : SyncResult<SyncAuth> =
@@ -77,7 +81,13 @@ type AnkiSyncService(backend: RslibBackend, syncServerSettings: IOptionsMonitor<
             if not (System.String.IsNullOrEmpty response.ServerMessage) then
                 logger.LogWarning("Sync server says: {ServerMessage}", response.ServerMessage)
 
-            let auth = followRedirect auth (if response.HasNewEndpoint then Some response.NewEndpoint else None)
+            let auth =
+                followRedirect
+                    auth
+                    (if response.HasNewEndpoint then
+                         Some response.NewEndpoint
+                     else
+                         None)
 
             match response.Required with
             | ChangesRequired.NoChanges
@@ -87,32 +97,32 @@ type AnkiSyncService(backend: RslibBackend, syncServerSettings: IOptionsMonitor<
 
     let fullSync (auth: SyncAuth) (direction: SyncDirection) : SyncResult<unit> =
         result {
-            let request = FullUploadOrDownloadRequest(Auth = auth, Upload = (direction = Upload))
+            let request =
+                FullUploadOrDownloadRequest(Auth = auth, Upload = (direction = Upload))
+
             do! call (fun () -> backend.FullUploadOrDownload request)
             // rslib skips media without the server's media usn, so it's synced on its own
             do! call (fun () -> backend.SyncMedia auth)
         }
 
-    let getSyncStatus (auth: SyncAuth) : SyncResult<SyncStatusResponse> =
-        call (fun () -> backend.SyncStatus auth)
+    let getSyncStatus (auth: SyncAuth) : SyncResult<SyncStatusResponse> = call (fun () -> backend.SyncStatus auth)
 
     let logSyncStatus (status: SyncStatusResponse) =
         match status.Required with
-        | Required.NoChanges ->
-            logger.LogInformation("Sync finished, collection is up to date")
-        | required ->
-            logger.LogWarning("Sync finished, but the collection still requires {Required}", required)
+        | Required.NoChanges -> logger.LogInformation("Sync finished, collection is up to date")
+        | required -> logger.LogWarning("Sync finished, but the collection still requires {Required}", required)
 
     let logFailure (failure: SyncFailed) =
         match failure with
         | SyncFailed.Aborted -> logger.LogInformation("Sync was aborted")
-        | SyncFailed.NetworkError message -> logger.LogWarning("Sync failed, sync server is unreachable: {Message}", message)
+        | SyncFailed.NetworkError message ->
+            logger.LogWarning("Sync failed, sync server is unreachable: {Message}", message)
         | failure -> logger.LogError("Sync failed: {Failure}", failure)
 
     interface ISyncService with
         member this.TrySync() =
             result {
-                let! auth = getAuth()
+                let! auth = getAuth ()
                 let! auth = syncAll auth
                 let! status = getSyncStatus auth
                 logSyncStatus status
@@ -121,7 +131,7 @@ type AnkiSyncService(backend: RslibBackend, syncServerSettings: IOptionsMonitor<
 
         member this.FullSync(direction) =
             result {
-                let! auth = getAuth()
+                let! auth = getAuth ()
                 logger.LogWarning("Starting full {Direction}, the other side's collection is replaced", direction)
                 do! fullSync auth direction
                 let! status = getSyncStatus auth

@@ -19,11 +19,13 @@ type SyncServiceTests(server: AnkiSyncServer) =
         Assert.Equal(sprintf "%A" expected, sprintf "%A" actual)
 
     let syncService (backend: RslibBackend) (settings: SyncServerSettings) : ISyncService =
-        let monitor =
-            { new IOptionsMonitor<SyncServerSettings> with
+        let monitor = {
+            new IOptionsMonitor<SyncServerSettings> with
                 member _.CurrentValue = settings
                 member _.Get _ = settings
-                member _.OnChange _ = null }
+                member _.OnChange _ = null
+        }
+
         AnkiSyncService(backend, monitor, NullLogger<AnkiSyncService>.Instance)
 
     let addBasicNote (backend: RslibBackend) (front: string) (back: string) =
@@ -69,7 +71,11 @@ type SyncServiceTests(server: AnkiSyncServer) =
 
         use other = new TempCollection()
         let otherService = syncService other.Backend settings
-        assertResult (Error(SyncFailed.FullSyncRequired SyncCollectionResponse.Types.ChangesRequired.FullDownload)) (otherService.TrySync())
+
+        assertResult
+            (Error(SyncFailed.FullSyncRequired SyncCollectionResponse.Types.ChangesRequired.FullDownload))
+            (otherService.TrySync())
+
         assertResult (Ok()) (otherService.FullSync Download)
         assertResult (Ok()) (otherService.TrySync())
         Assert.Equal(2, other.Backend.SearchNotes(SearchRequest(Search = "")).Ids.Count)

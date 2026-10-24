@@ -39,11 +39,7 @@ type FullSyncDto = {
 }
 
 [<CLIMutable>]
-type FieldError = {
-    field: string
-    issue: string
-    rejectedValue: obj option
-}
+type FieldError = { field: string; issue: string; rejectedValue: obj option }
 
 [<CLIMutable>]
 type ValidationError = {
@@ -72,6 +68,7 @@ let fetchInvalidFieldsFromModel (model: 'T) (errors: ValidationResult seq) =
             None
         else
             let ty = value.GetType()
+
             if ty.IsGenericType && ty.GetGenericTypeDefinition() = typedefof<option<_>> then
                 FSharpValue.GetUnionFields(value, ty) |> snd |> Array.tryHead
             else
@@ -79,6 +76,7 @@ let fetchInvalidFieldsFromModel (model: 'T) (errors: ValidationResult seq) =
 
     let lookUpValue (name: string) : obj option =
         let m = box model
+
         if isNull m || not (FSharpType.IsRecord(m.GetType())) then
             None
         else
@@ -90,7 +88,13 @@ let fetchInvalidFieldsFromModel (model: 'T) (errors: ValidationResult seq) =
     |> Seq.collect (fun err ->
         // A rule may cover several members, each of them gets its own entry
         match err.MemberNames |> Seq.map _.Trim() |> List.ofSeq with
-        | [] -> [ { field = ""; issue = err.ErrorMessage; rejectedValue = None } ]
+        | [] -> [
+            {
+                field = ""
+                issue = err.ErrorMessage
+                rejectedValue = None
+            }
+          ]
         | names ->
             names
             |> List.map (fun name -> {
@@ -128,7 +132,8 @@ let toDeck (dto: CreateDeckDto) : Anki.Decks.Deck =
     Anki.Decks.Deck(
         Name = dto.Name.Trim(),
         Common = Anki.Decks.Deck.Types.Common(StudyCollapsed = true, BrowserCollapsed = true),
-        Normal = Anki.Decks.Deck.Types.Normal(ConfigId = 1L))
+        Normal = Anki.Decks.Deck.Types.Normal(ConfigId = 1L)
+    )
 
 let toAddNoteRequest (dto: AddNoteDto) : Anki.Notes.AddNoteRequest =
     let note = Anki.Notes.Note(NotetypeId = dto.NoteTypeId)

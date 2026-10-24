@@ -9,6 +9,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		paket.dependencies = paket.dependencies
 		README.md = README.md
 		build.fsx = Scripts/build.fsx
+		gen-workflow.fsx = Scripts/gen-workflow.fsx
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ankit.Native", "src\Ankit.Native\Ankit.Native.csproj", "{452916EC-79B6-4C8B-8528-369D929FD39B}"

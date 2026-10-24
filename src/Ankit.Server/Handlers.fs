@@ -10,10 +10,9 @@ open Microsoft.Extensions.Logging
 open Oxpecker
 open type Microsoft.AspNetCore.Http.StatusCodes
 
-let ping =
-    (setStatusCode Status200OK) >=> (text "PONG!")
+let ping = (setStatusCode Status200OK) >=> (text "PONG!")
 
-let writeError (ctx: HttpContext) (code: int) (msg: string) (details: obj option)  =
+let writeError (ctx: HttpContext) (code: int) (msg: string) (details: obj option) =
     let logger = ctx.GetLogger()
     logger.LogWarning("Request failed with {StatusCode}: {Message}", code, msg)
 
@@ -43,12 +42,15 @@ let private statusOf (error: AnkiError) =
 
 let private runCommand (ctx: HttpContext) (cmd: AnkiCommand) : Task =
     task {
-        let reply = TaskCompletionSource<Result<unit, AnkiError>>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let reply =
+            TaskCompletionSource<Result<unit, AnkiError>>(TaskCreationOptions.RunContinuationsAsynchronously)
+
         let ch = ctx.GetService<Channel<AnkiSyncMsg>>()
         do! ch.Writer.WriteAsync(AnkiSyncMsg(cmd, reply), ctx.RequestAborted)
+
         try
             match! reply.Task.WaitAsync(ctx.RequestAborted) with
-            | Ok () -> ctx.SetStatusCode Status204NoContent
+            | Ok() -> ctx.SetStatusCode Status204NoContent
             | Error e -> return! writeError ctx (statusOf e) (describe e) None
         with :? TaskCanceledException when not ctx.RequestAborted.IsCancellationRequested ->
             return! writeError ctx Status503ServiceUnavailable "Server is shutting down" None
@@ -76,9 +78,7 @@ let createDeck (createDeck: CreateDeckDto) : EndpointHandler =
 
 let addNote (addNote: AddNoteDto) : EndpointHandler =
     let note = toAddNoteRequest addNote
-    fun (ctx: HttpContext) ->
-        runCommand ctx (AddNote note)
+    fun (ctx: HttpContext) -> runCommand ctx (AddNote note)
 
 let fullSync (fullSync: FullSyncDto) : EndpointHandler =
-    fun (ctx: HttpContext) ->
-        runCommand ctx (FullSync fullSync.Direction)
+    fun (ctx: HttpContext) -> runCommand ctx (FullSync fullSync.Direction)

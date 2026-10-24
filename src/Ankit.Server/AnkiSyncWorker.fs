@@ -22,19 +22,24 @@ type AnkiCommand =
     | AddNote of Anki.Notes.AddNoteRequest
     | FullSync of SyncDirection
 
-type AnkiSyncMsg =
-    | AnkiSyncMsg of cmd: AnkiCommand * reply: TaskCompletionSource<Result<unit, AnkiError>>
+type AnkiSyncMsg = AnkiSyncMsg of cmd: AnkiCommand * reply: TaskCompletionSource<Result<unit, AnkiError>>
 
-type AnkiSyncWorker(backend: RslibBackend, syncService: ISyncService, ch: Channel<AnkiSyncMsg>, logger: ILogger<AnkiSyncWorker>, settings: IOptionsMonitor<AnkitServerSettings>) =
+type AnkiSyncWorker
+    (
+        backend: RslibBackend,
+        syncService: ISyncService,
+        ch: Channel<AnkiSyncMsg>,
+        logger: ILogger<AnkiSyncWorker>,
+        settings: IOptionsMonitor<AnkitServerSettings>
+    ) =
     inherit BackgroundService()
 
-    let getDebounceTime() =
+    let getDebounceTime () =
         TimeSpan.FromMilliseconds(float settings.CurrentValue.SyncDebounceTime)
 
     let applyCommand (cmd: AnkiCommand) : Result<unit, AnkiError> =
         match cmd with
-        | FullSync direction ->
-            syncService.FullSync direction |> Result.mapError AnkiError.FullSyncError
+        | FullSync direction -> syncService.FullSync direction |> Result.mapError AnkiError.FullSyncError
         | CreateDeck _
         | AddNote _ ->
             try
@@ -42,9 +47,11 @@ type AnkiSyncWorker(backend: RslibBackend, syncService: ISyncService, ch: Channe
                 | CreateDeck deck -> backend.AddDeck deck |> ignore
                 | AddNote noteRequest -> backend.AddNote noteRequest |> ignore
                 | FullSync _ -> ()
-                Ok ()
+
+                Ok()
             with :? RslibException as e ->
                 logger.LogError(e, "Failed to apply {Command}", cmd)
+
                 match cmd with
                 | CreateDeck _ -> Error AnkiError.CreateDeckError
                 | _ -> Error AnkiError.AddNoteError
@@ -56,32 +63,39 @@ type AnkiSyncWorker(backend: RslibBackend, syncService: ISyncService, ch: Channe
             let rd = ch.Reader
             let requiresSync = ref false
 
-            let applyPending() =
+            let applyPending () =
                 let mutable msg = Unchecked.defaultof<AnkiSyncMsg>
+
                 while rd.TryRead(&msg) do
                     let (AnkiSyncMsg(cmd, reply)) = msg
                     let result = applyCommand cmd
+
                     match cmd, result with
-                    | FullSync _, Ok () -> requiresSync.Value <- false
-                    | _, Ok () -> requiresSync.Value <- true
+                    | FullSync _, Ok() -> requiresSync.Value <- false
+                    | _, Ok() -> requiresSync.Value <- true
                     | _, Error _ -> ()
+
                     reply.TrySetResult result |> ignore
 
             try
                 let mutable running = true
+
                 while running do
                     let! canRead = rd.WaitToReadAsync(stoppingToken)
+
                     if not canRead then
                         running <- false
                     else
-                        applyPending()
+                        applyPending ()
                         use window = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken)
-                        window.CancelAfter(getDebounceTime())
+                        window.CancelAfter(getDebounceTime ())
+
                         try
                             let mutable windowOpen = true
+
                             while windowOpen do
                                 let! more = rd.WaitToReadAsync(window.Token)
-                                if more then applyPending() else windowOpen <- false
+                                if more then applyPending () else windowOpen <- false
                         with :? OperationCanceledException when not stoppingToken.IsCancellationRequested ->
                             ()
 
@@ -92,6 +106,7 @@ type AnkiSyncWorker(backend: RslibBackend, syncService: ISyncService, ch: Channe
                 ()
 
             let mutable msg = Unchecked.defaultof<AnkiSyncMsg>
+
             while rd.TryRead(&msg) do
                 let (AnkiSyncMsg(_, reply)) = msg
                 reply.TrySetCanceled(stoppingToken) |> ignore
