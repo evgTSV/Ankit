@@ -6,7 +6,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Tests.fs" />
+    <Compile Include="AnkiSyncServer.fs" />
+    <Compile Include="TempCollection.fs" />
+    <Compile Include="SyncServiceTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
