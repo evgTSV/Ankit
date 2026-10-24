@@ -7,6 +7,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Utils.fs" />
+    <Compile Include="Env.fs" />
+    <Compile Include="Services.fs" />
+    <Compile Include="AnkiSyncWorker.fs" />
+    <Compile Include="Dto.fs" />
+    <Compile Include="ErrorHandler.fs" />
+    <Compile Include="Handlers.fs" />
     <Compile Include="Program.fs"/>
   </ItemGroup>
 
@@ -16,6 +23,14 @@
     </Content>
     <Content Include="Dockerfile" />
     <Content Include="paket.references" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ankit.Native\Ankit.Native.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ankit.Native\Ankit.Native.csproj" />
   </ItemGroup>
 
   <Import Project="..\..\.paket\Paket.Restore.targets" />

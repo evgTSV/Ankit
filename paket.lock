@@ -46,6 +46,11 @@ RESTRICTION: == net10.0
 NUGET
   remote: https://api.nuget.org/v3/index.json
     FSharp.Core (10.1.402)
+    FSharp.SystemTextJson (1.4.36)
+      FSharp.Core (>= 4.7)
+      System.Text.Json (>= 6.0.10)
+    FsToolkit.ErrorHandling (5.2)
+      FSharp.Core (>= 9.0.300)
     Microsoft.Extensions.ObjectPool (10.0.13)
     Microsoft.IO.RecyclableMemoryStream (3.0.1)
     Oxpecker (2.1.1)
@@ -55,5 +60,6 @@ NUGET
     Oxpecker.ViewEngine (2.1)
       FSharp.Core (>= 10.0.100)
       Microsoft.Extensions.ObjectPool (>= 10.0)
+    System.Text.Json (10.0.13)
     TypeShape (10.0)
       FSharp.Core (>= 4.5.4)

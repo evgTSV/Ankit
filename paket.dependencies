@@ -5,6 +5,8 @@ group WebServer
     framework: net10.0
 
     nuget Oxpecker 2.1.1
+    nuget FsToolkit.ErrorHandling 5.2.0
+    nuget FSharp.SystemTextJson 1.4.36
 
 group Native
     source https://api.nuget.org/v3/index.json
