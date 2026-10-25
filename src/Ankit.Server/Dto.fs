@@ -3,7 +3,6 @@ module Ankit.Server.Dto
 open System
 open System.ComponentModel.DataAnnotations
 open System.Threading.Tasks
-open Ankit.Server.Services
 open Ankit.Server.Utils
 open Microsoft.AspNetCore.Http
 open Microsoft.FSharp.Reflection
@@ -30,6 +29,10 @@ type AddNoteDto = {
 
     Tags: string array option
 }
+
+type SyncDirection =
+    | Upload
+    | Download
 
 [<CLIMutable>]
 type FullSyncDto = {

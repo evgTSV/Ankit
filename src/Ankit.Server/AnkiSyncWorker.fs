@@ -4,6 +4,7 @@ open System
 open System.Threading
 open System.Threading.Tasks
 open Ankit.Native
+open Ankit.Server.Dto
 open Ankit.Server.Env
 open Ankit.Server.Services
 open Microsoft.Extensions.Hosting

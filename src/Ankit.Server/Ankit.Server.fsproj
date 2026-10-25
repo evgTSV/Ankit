@@ -9,10 +9,11 @@
 
   <ItemGroup>
     <Compile Include="Utils.fs" />
+    <Compile Include="ErrorText.fs" />
     <Compile Include="Env.fs" />
+    <Compile Include="Dto.fs" />
     <Compile Include="Services.fs" />
     <Compile Include="AnkiSyncWorker.fs" />
-    <Compile Include="Dto.fs" />
     <Compile Include="ErrorHandler.fs" />
     <Compile Include="Handlers.fs" />
     <Compile Include="Program.fs"/>
