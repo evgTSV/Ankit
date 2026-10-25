@@ -143,6 +143,21 @@ fn backend_errors_are_encoded_protobuf() {
 }
 
 #[test]
+fn translation_index_finds_known_keys_only() {
+    let (mut module, mut message) = (u32::MAX, u32::MAX);
+    let key = "sync-wrong-pass";
+    let status =
+        unsafe { ankit_translation_index(key.as_ptr(), key.len(), &mut module, &mut message) };
+    assert_eq!(status, ANKIT_OK);
+    assert_ne!(module, u32::MAX);
+
+    let key = "no-such-message";
+    let status =
+        unsafe { ankit_translation_index(key.as_ptr(), key.len(), &mut module, &mut message) };
+    assert_eq!(status, ANKIT_INVALID_ARGUMENT);
+}
+
+#[test]
 fn null_arguments_are_rejected() {
     let mut out = AnkitBuffer {
         data: ptr::null_mut(),

@@ -27,6 +27,13 @@ public sealed class RslibBackendTests : IDisposable
     }
 
     [Fact]
+    public void FtlMessagesCanBeTranslated()
+    {
+        Assert.Equal("Email or password was incorrect; please try again.", Backend.Translate("sync-wrong-pass"));
+        Assert.Throws<ArgumentException>(() => Backend.Translate("no-such-message"));
+    }
+
+    [Fact]
     public void AddedDeckIsListed()
     {
         var deck = Backend.NewDeck();

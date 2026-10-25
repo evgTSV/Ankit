@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 using Anki.Backend;
+using Anki.I18N;
 using Ankit.Native.Interop;
 using Google.Protobuf;
 
@@ -81,6 +82,35 @@ public sealed unsafe partial class RslibBackend : IDisposable
     /// </summary>
     public static RslibBackend Open(params IEnumerable<string> preferredLanguages) =>
         Open(new BackendInit { PreferredLangs = { preferredLanguages } });
+
+    /// <summary>
+    /// Renders the Fluent message <paramref name="key"/> (as in Anki's <c>.ftl</c> files, e.g. <c>sync-wrong-pass</c>)
+    /// in the backend's language, the same way rslib renders its error messages.
+    /// </summary>
+    /// <exception cref="ArgumentException">rslib has no message <paramref name="key"/>.</exception>
+    public string Translate(string key, IDictionary<string, TranslateArgValue>? args = null)
+    {
+        var bytes = Encoding.UTF8.GetBytes(key);
+        int status;
+        uint module, message;
+        fixed (byte* data = bytes)
+        {
+            status = NativeMethods.TranslationIndex(data, (nuint)bytes.Length, out module, out message);
+        }
+
+        if (status != NativeMethods.Ok)
+        {
+            throw new ArgumentException($"rslib has no translation '{key}'", nameof(key));
+        }
+
+        var request = new TranslateStringRequest { ModuleIndex = module, MessageIndex = message };
+        if (args is not null)
+        {
+            request.Args.Add(args);
+        }
+
+        return TranslateString(request).Val;
+    }
 
     /// <summary>
     /// Calls a rslib method with an encoded request and returns the encoded response.

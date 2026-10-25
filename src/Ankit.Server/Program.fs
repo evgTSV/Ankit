@@ -57,6 +57,7 @@ let configureServices (configuration: IConfiguration) (services: IServiceCollect
         .AddSingleton<Channel<AnkiSyncMsg>>(
             Channel.CreateUnbounded<AnkiSyncMsg>(UnboundedChannelOptions(SingleReader = true))
         )
+        .AddSingleton<IErrorTextService, AnkiErrorTextService>()
         .AddSingleton<IAuthService, AnkiAuthService>()
         .AddSingleton<ISyncService, AnkiSyncService>()
         .AddHostedService<AnkiSyncWorker>()

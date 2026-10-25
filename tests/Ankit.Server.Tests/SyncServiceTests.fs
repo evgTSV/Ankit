@@ -19,13 +19,14 @@ type SyncServiceTests(server: AnkiSyncServer) =
     let assertResult (expected: SyncResult<unit>) (actual: SyncResult<unit>) =
         Assert.Equal($"%A{expected}", $"%A{actual}")
 
-    let syncServerSettings (settings: SyncServerSettings) =
-        {
-            new IOptionsMonitor<SyncServerSettings> with
-                member _.CurrentValue = settings
-                member _.Get _ = settings
-                member _.OnChange _ = null
-        }
+    let syncServerSettings (settings: SyncServerSettings) = {
+        new IOptionsMonitor<SyncServerSettings> with
+            member _.CurrentValue = settings
+            member _.Get _ = settings
+            member _.OnChange _ = null
+    }
+
+    let errorText (backend: RslibBackend) : IErrorTextService = AnkiErrorTextService backend
 
     let authService (backend: RslibBackend) (settings: SyncServerSettings) : IAuthService =
         AnkiAuthService(backend, syncServerSettings settings)
@@ -46,7 +47,10 @@ type SyncServiceTests(server: AnkiSyncServer) =
         use collection = new TempCollection()
         let settings = { server.Settings Users[0] with Password = "wrong" }
 
-        assertResult (Error <| SyncFailed.AuthFailed ErrorText.InvalidCredentialsText) ((syncService collection.Backend settings).TrySync())
+        assertResult
+            (Error
+             <| SyncFailed.AuthFailed((errorText collection.Backend).InvalidCredentials))
+            ((syncService collection.Backend settings).TrySync())
 
     [<LinuxDockerFact>]
     member _.``Untouched collection has nothing to sync with a fresh account``() =
@@ -61,7 +65,10 @@ type SyncServiceTests(server: AnkiSyncServer) =
 
         let result = (syncService collection.Backend (server.Settings Users[2])).TrySync()
 
-        assertResult (Error <| SyncFailed.FullSyncRequired SyncCollectionResponse.Types.ChangesRequired.FullUpload) result
+        assertResult
+            (Error
+             <| SyncFailed.FullSyncRequired SyncCollectionResponse.Types.ChangesRequired.FullUpload)
+            result
 
     [<LinuxDockerFact>]
     member _.``Changes reach other clients after the initial full sync``() =
@@ -91,6 +98,9 @@ type SyncServiceTests(server: AnkiSyncServer) =
         use collection = new TempCollection()
         let settings = { server.Settings Users[4] with Password = "wrong" }
 
-        assertResult (Error <| SyncFailed.AuthFailed ErrorText.InvalidCredentialsText) ((syncService collection.Backend settings).FullSync Upload)
+        assertResult
+            (Error
+             <| SyncFailed.AuthFailed((errorText collection.Backend).InvalidCredentials))
+            ((syncService collection.Backend settings).FullSync Upload)
 
     interface IClassFixture<AnkiSyncServer>

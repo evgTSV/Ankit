@@ -205,6 +205,7 @@ name = "ankit-rslib"
 version = "1.0.0"
 dependencies = [
  "anki",
+ "anki_i18n",
  "anki_proto",
  "anki_proto_gen",
  "prost",

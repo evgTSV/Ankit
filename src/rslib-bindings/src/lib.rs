@@ -14,6 +14,7 @@
 //! - a backend handle must be released with [`ankit_backend_close`].
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::ffi::c_char;
 use std::ffi::CString;
 use std::panic;
@@ -25,6 +26,8 @@ use std::sync::OnceLock;
 use anki::backend::init_backend;
 use anki::backend::Backend;
 use anki::log::set_global_logger;
+use anki_i18n::All;
+use anki_i18n::Translations;
 
 /// Call completed, the output buffer holds the response.
 pub const ANKIT_OK: i32 = 0;
@@ -131,6 +134,50 @@ pub extern "C" fn ankit_buildhash() -> *const c_char {
     BUILDHASH
         .get_or_init(|| CString::new(anki::version::buildhash()).unwrap_or_default())
         .as_ptr()
+}
+
+/// Looks up the indices `I18nService.TranslateString` expects for the Fluent
+/// message `key` (e.g. `sync-wrong-pass`). They are positions in the `.ftl`
+/// files of the linked rslib, so they must not be hardcoded.
+///
+/// Returns [`ANKIT_OK`], or [`ANKIT_INVALID_ARGUMENT`] if there is no such
+/// message, `key` is not UTF-8, or an output pointer is null.
+///
+/// # Safety
+/// `key` must point to `key_len` readable bytes; `out_module` and
+/// `out_message` must point to writable memory.
+#[no_mangle]
+pub unsafe extern "C" fn ankit_translation_index(
+    key: *const u8,
+    key_len: usize,
+    out_module: *mut u32,
+    out_message: *mut u32,
+) -> i32 {
+    static INDICES: OnceLock<HashMap<&'static str, (u32, u32)>> = OnceLock::new();
+
+    if key.is_null() || out_module.is_null() || out_message.is_null() {
+        return ANKIT_INVALID_ARGUMENT;
+    }
+    let Ok(key) = std::str::from_utf8(slice::from_raw_parts(key, key_len)) else {
+        return ANKIT_INVALID_ARGUMENT;
+    };
+    let indices = INDICES.get_or_init(|| {
+        let mut indices = HashMap::new();
+        for (module, keys) in All::KEYS_BY_MODULE.iter().enumerate() {
+            for (message, key) in keys.iter().enumerate() {
+                indices.insert(*key, (module as u32, message as u32));
+            }
+        }
+        indices
+    });
+    match indices.get(key) {
+        Some(&(module, message)) => {
+            out_module.write(module);
+            out_message.write(message);
+            ANKIT_OK
+        }
+        None => ANKIT_INVALID_ARGUMENT,
+    }
 }
 
 /// Sets up rslib's global logger. `path` is a UTF-8 file path (not

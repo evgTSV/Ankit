@@ -17,6 +17,9 @@ internal static unsafe partial class NativeMethods
     [LibraryImport(Library, EntryPoint = "ankit_buildhash")]
     public static partial byte* BuildHash();
 
+    [LibraryImport(Library, EntryPoint = "ankit_translation_index")]
+    public static partial int TranslationIndex(byte* key, nuint keyLength, out uint module, out uint message);
+
     [LibraryImport(Library, EntryPoint = "ankit_initialize_logging")]
     public static partial int InitializeLogging(byte* path, nuint pathLength, out AnkitBuffer error);
 

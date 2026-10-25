@@ -43,7 +43,7 @@ module SyncFailed =
 
     let ofInfra (error: InfraFail) : SyncFailed =
         match error with
-        | InfraFail.BackendFailed(k, m) -> classify(k, m)
+        | InfraFail.BackendFailed(k, m) -> classify (k, m)
         | e -> SyncFailed.InfraFail e
 
 module ServiceUtils =
@@ -55,15 +55,21 @@ module ServiceUtils =
         try
             Ok <| f ()
         with
-        | :? BackendException as e ->
-            Error <| InfraFail.BackendFailed(e.Error.Kind, e.Error.Message)
+        | :? BackendException as e -> Error <| InfraFail.BackendFailed(e.Error.Kind, e.Error.Message)
         | :? RslibException as e -> Error <| InfraFail.NativeFailed e.Message
-        | _ -> reraise()
+        | _ -> reraise ()
 
-    let guardCallSync (f: unit -> 'a) : SyncResult<'a> =
-        guardCall f |> Result.mapError SyncFailed.ofInfra
+    let guardCallSync (f: unit -> 'a) : SyncResult<'a> = guardCall f |> Result.mapError SyncFailed.ofInfra
 
 open ServiceUtils
+
+[<Interface>]
+type IErrorTextService =
+    abstract InvalidCredentials: string
+
+type AnkiErrorTextService(backend: RslibBackend) =
+    interface IErrorTextService with
+        member _.InvalidCredentials = backend.Translate "sync-wrong-pass"
 
 [<Interface>]
 type IAuthService =
@@ -79,7 +85,7 @@ type AnkiAuthService(backend: RslibBackend, syncServerSettings: IOptionsMonitor<
                 Endpoint = syncServerSettings.CurrentValue.Endpoint
             )
 
-        guardCallSync (fun() -> backend.SyncLogin loginRequest)
+        guardCallSync (fun () -> backend.SyncLogin loginRequest)
 
     interface IAuthService with
         member this.GetAuth() : SyncResult<SyncAuth> = getAuth ()
@@ -89,8 +95,7 @@ type ISyncService =
     abstract TrySync: unit -> SyncResult<unit>
     abstract FullSync: SyncDirection -> SyncResult<unit>
 
-type AnkiSyncService
-    (backend: RslibBackend, authService: IAuthService, logger: ILogger<AnkiSyncService>) =
+type AnkiSyncService(backend: RslibBackend, authService: IAuthService, logger: ILogger<AnkiSyncService>) =
 
     /// The server may redirect us to another shard, subsequent requests have to go there
     let followRedirect (auth: SyncAuth) (newEndpoint: string option) : SyncAuth =
@@ -105,6 +110,7 @@ type AnkiSyncService
     let syncAll (auth: SyncAuth) : SyncResult<SyncAuth> =
         result {
             let request = SyncCollectionRequest(Auth = auth, SyncMedia = true)
+
             let! response =
                 guardCall (fun () -> backend.SyncCollection request)
                 |> Result.mapError SyncFailed.ofInfra
@@ -138,6 +144,7 @@ type AnkiSyncService
 
     let getSyncStatus (auth: SyncAuth) : SyncResult<SyncStatusResponse> =
         guardCallSync (fun () -> backend.SyncStatus auth)
+
     let logSyncStatus (status: SyncStatusResponse) =
         match status.Required with
         | Required.NoChanges -> logger.LogInformation("Sync finished, collection is up to date")
@@ -145,12 +152,10 @@ type AnkiSyncService
 
     let logFailure (failure: SyncFailed) =
         match failure with
-        | SyncFailed.Aborted message ->
-            logger.LogInformation("Sync was aborted: {Message}", message)
+        | SyncFailed.Aborted message -> logger.LogInformation("Sync was aborted: {Message}", message)
         | SyncFailed.NetworkError message ->
             logger.LogWarning("Sync failed, sync server is unreachable: {Message}", message)
-        | SyncFailed.AuthFailed reason ->
-            logger.LogWarning("Sync failed, authentication rejected: {Reason}", reason)
+        | SyncFailed.AuthFailed reason -> logger.LogWarning("Sync failed, authentication rejected: {Reason}", reason)
         | SyncFailed.ServerRejected reason ->
             logger.LogWarning("Sync failed, server rejected the request: {Reason}", reason)
         | SyncFailed.FullSyncRequired required ->
