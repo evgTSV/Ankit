@@ -4,6 +4,9 @@ open System.ComponentModel.DataAnnotations
 open System.Text.Json
 open System.Text.Json.Serialization
 
+/// How union case names are written, e.g. FullUpload as "FULL_UPLOAD"; reading ignores the case
+let unionTagNaming = JsonNamingPolicy.SnakeCaseUpper
+
 let jsonOptions =
     let opts = JsonSerializerOptions()
     opts.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
@@ -16,7 +19,8 @@ let jsonOptions =
     JsonFSharpOptions
         .Default()
         .WithUnionUnwrapFieldlessTags()
-        .WithUnionTagNamingPolicy(JsonNamingPolicy.SnakeCaseUpper)
+        .WithUnionTagNamingPolicy(unionTagNaming)
+        .WithUnionTagCaseInsensitive()
         .WithUnionNamedFields()
         .WithUnionTagName("code")
         .WithUnionInternalTag()

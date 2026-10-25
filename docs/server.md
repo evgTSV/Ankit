@@ -38,6 +38,9 @@ In Docker the collection lives in `/app/data`, mount a volume there to keep it w
 | `DELETE /notes/{id}`    |                                                                  | `204`                   |
 | `POST /sync/full`       | `{ "direction": "upload" }` or `{ "direction": "download" }`     | `204`                   |
 
+The OpenAPI description of the API is served at `GET /openapi/v1.json`, and Swagger UI at `/swagger` to browse and
+try the endpoints. Union values such as `direction` are case-insensitive (`upload`, `UPLOAD`).
+
 `fields` holds one value per field of the note type, in its order; `GET /note-types` lists them. `PUT /notes/{id}`
 keeps the tags when `tags` is left out. Deleting a deck deletes its child decks and all of their cards; the default
 deck stays: its cards are deleted and its name is reset. Deleting a note deletes its cards.

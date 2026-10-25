@@ -2,3 +2,5 @@ group WebServer
     Oxpecker
     FsToolkit.ErrorHandling
     FSharp.SystemTextJson
+    Oxpecker.OpenApi
+    Swashbuckle.AspNetCore.SwaggerUI

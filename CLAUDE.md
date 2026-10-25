@@ -142,7 +142,7 @@ Fine for quick iteration once `Prepare` has run:
 ### Ankit.Server (F#)
 
 Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services` → `AnkiSyncWorker` → `ErrorHandler` →
-`Handlers` → `Program`. A new file must be added to the `.fsproj` in the right position.
+`Handlers` → `ApiDocs` → `Program`. A new file must be added to the `.fsproj` in the right position.
 
 - **Services** (`Services.fs`): interface + `Anki*` implementation taking `RslibBackend` (and others) by constructor,
   registered as singletons in `Program.fs`. `IErrorTextService`, `IAuthService`, `ISyncService`, `IDeckService`,
@@ -163,10 +163,20 @@ Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services
 - **Handlers** (`Handlers.fs`): `query` for reads, `change` for writes, `submit` for full sync. Bind bodies with
   `ModelBinder.bindOrDeclineJson` / `bindOrDeclineJson1` (with a route value) / `bindOrDeclineQuery`; they validate
   DataAnnotations and answer 422 with `fieldErrors`. Routes live in `Program.fs` (`routef "/notes/{%d}"` for `int64`).
+- **OpenAPI** (`ApiDocs.fs`, served at `/openapi/v1.json` via Oxpecker.OpenApi + Microsoft.AspNetCore.OpenApi;
+  Swagger UI at `/swagger` from `Swashbuckle.AspNetCore.SwaggerUI`, which only serves the UI for that spec):
+  every route in `Program.fs` must end with `|> describe "<OperationId>" "<summary>" <request type option>
+  [ <responses> ]`, using the response values in `ApiDocs` (`ok<'T>`, `okText`, `created`, `noContent`, `notFound`,
+  `invalid`, `syncFailed`, `shuttingDown`); add `|> withQuery name description` for query parameters, which can't
+  be inferred. Path parameter names come from the handler's parameter names, so give `routef` a named lambda
+  (`fun deckId -> ...`), not `bindOrDeclineJson1`, whose wrapper is named `x`. The generator reads ASP.NET's HTTP
+  JSON options, not `jsonOptions`; `Program.fs` aligns the parts that matter (strict numbers) and schema transformers
+  fix F# types: options, fieldless unions (string enums), non-option record fields (not nullable). Check the
+  generated spec after adding a route or DTO.
 - **DTOs** (`Dto.fs`): `[<CLIMutable>]` records with DataAnnotations (`Required`, `MinLength`, custom `NumericId`).
-  JSON is camelCase (`Utils.jsonOptions`); options are skippable; unions use `WithUnionUnwrapFieldlessTags`
-  (e.g. `"direction": "upload"`). Conversions between DTOs and service types belong in `Handlers.fs`, because
-  `Dto.fs` compiles before `Services.fs`.
+  JSON is camelCase (`Utils.jsonOptions`); options are skippable; fieldless unions are written as their case name in
+  `SNAKE_UPPER` (`Utils.unionTagNaming`) and read case-insensitively (`"direction": "upload"` works). Conversions
+  between DTOs and service types belong in `Handlers.fs`, because `Dto.fs` compiles before `Services.fs`.
 - **Responses**: create → `201 {"id"}`, update/delete → `204`, reads → `200` JSON, errors → `ApiError` JSON
   (`code`, `message`, `traceId`, `timestamp`, `path`). Keep `docs/server.md` in sync when the API changes.
 - Configuration: `Env.fs` (`AnkitServerSettings` section `Ankit`, `SyncServerSettings` section `SyncServer`),
@@ -235,6 +245,10 @@ rustfmt defaults (`cargo fmt`), one `use` per item as Anki does, doc comments on
 - Query binding is case-sensitive: query DTO fields must be lowercase to match `?query=` (see `SearchNotesDto`).
 - Binding an empty query string throws inside Oxpecker; `bindOrDeclineQuery` works around it by validating an empty
   model.
+- `ResponseBody` needs a body type, so a bodiless 204 is the `ApiDocs.noContent` marker, which `describe` turns into a
+  real empty response.
+- Nullable reference types (`<Nullable>enable</Nullable>`) are not enabled in `Ankit.Server`: in F# that switches on
+  nullness checking with dozens of warnings in existing code. The nullability schema transformer covers the spec.
 
 **Docker** (`src/Ankit.Server/Dockerfile`, used by `./build Run` / `compose.yaml`)
 
