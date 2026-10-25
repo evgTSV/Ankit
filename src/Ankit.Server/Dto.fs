@@ -30,6 +30,48 @@ type AddNoteDto = {
     Tags: string array option
 }
 
+[<CLIMutable>]
+type RenameDeckDto = {
+    [<Required(ErrorMessage = "Deck name is required")>]
+    Name: string
+}
+
+[<CLIMutable>]
+type UpdateNoteDto = {
+    [<Required(ErrorMessage = "Fields are required"); MinLength(1, ErrorMessage = "Note needs at least one field")>]
+    Fields: string array
+
+    /// Replaces the tags when given, otherwise they are kept
+    Tags: string array option
+}
+
+[<CLIMutable>]
+type SearchNotesDto = {
+    /// Anki search syntax, e.g. "deck:Japanese tag:verb". Lowercase, because query binding is case-sensitive
+    [<Required(ErrorMessage = "Query is required")>]
+    query: string
+}
+
+type CreatedDto = { Id: int64 }
+
+type DeckDto = {
+    Id: int64
+    Name: string
+}
+
+type NoteDto = {
+    Id: int64
+    NoteTypeId: int64
+    Fields: string array
+    Tags: string array
+}
+
+type NoteTypeDto = {
+    Id: int64
+    Name: string
+    Fields: string array
+}
+
 type SyncDirection =
     | Upload
     | Download
@@ -133,17 +175,3 @@ let validateModel (f: 'T -> EndpointHandler) : ModelValidationResult<'T> -> Http
                 ctx.SetStatusCode(Status422UnprocessableEntity)
                 return! json valError ctx
             })
-
-let toDeck (dto: CreateDeckDto) : Anki.Decks.Deck =
-    // Mirrors Deck::new_normal in rslib
-    Anki.Decks.Deck(
-        Name = dto.Name.Trim(),
-        Common = Anki.Decks.Deck.Types.Common(StudyCollapsed = true, BrowserCollapsed = true),
-        Normal = Anki.Decks.Deck.Types.Normal(ConfigId = 1L)
-    )
-
-let toAddNoteRequest (dto: AddNoteDto) : Anki.Notes.AddNoteRequest =
-    let note = Anki.Notes.Note(NotetypeId = dto.NoteTypeId)
-    note.Fields.AddRange dto.Fields
-    dto.Tags |> Option.iter note.Tags.AddRange
-    Anki.Notes.AddNoteRequest(Note = note, DeckId = dto.DeckId)

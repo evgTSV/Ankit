@@ -19,11 +19,23 @@ open Microsoft.Extensions.Options
 let endpoints = [
     GET [
         route "/ping" Handlers.ping
+        route "/decks" Handlers.listDecks
+        route "/notes" <| bindOrDeclineQuery Handlers.searchNotes
+        routef "/notes/{%d}" Handlers.getNote
+        route "/note-types" Handlers.listNoteTypes
     ]
     POST [
         route "/decks" <| bindOrDeclineJson Handlers.createDeck
         route "/notes" <| bindOrDeclineJson Handlers.addNote
         route "/sync/full" <| bindOrDeclineJson Handlers.fullSync
+    ]
+    PUT [
+        routef "/decks/{%d}" <| bindOrDeclineJson1 Handlers.renameDeck
+        routef "/notes/{%d}" <| bindOrDeclineJson1 Handlers.updateNote
+    ]
+    DELETE [
+        routef "/decks/{%d}" Handlers.deleteDeck
+        routef "/notes/{%d}" Handlers.deleteNote
     ]
 ]
 
@@ -60,6 +72,9 @@ let configureServices (configuration: IConfiguration) (services: IServiceCollect
         .AddSingleton<IErrorTextService, AnkiErrorTextService>()
         .AddSingleton<IAuthService, AnkiAuthService>()
         .AddSingleton<ISyncService, AnkiSyncService>()
+        .AddSingleton<IDeckService, AnkiDeckService>()
+        .AddSingleton<INoteService, AnkiNoteService>()
+        .AddSingleton<INotetypeService, AnkiNotetypeService>()
         .AddHostedService<AnkiSyncWorker>()
     |> ignore
 
