@@ -117,7 +117,14 @@ let doNothing = ignore
 let fromProcResult (procResult: ProcessResult) : Result<unit, string list> =
     if procResult.OK then Ok() else Error procResult.Errors
 
-let dotnetCli : DotNet.Options -> DotNet.Options = id
+// Fake may fall back to a bare "dotnet.exe" and then prepends its empty directory to PATH. cmd.exe, which MSBuild's
+// Exec runs in (e.g. for paket restore), finds nothing on a PATH starting with ';'. This script runs in `dotnet fsi`,
+// so its host is the dotnet that honors global.json
+let dotnetCli (o: DotNet.Options) : DotNet.Options =
+    match Environment.ProcessPath with
+    | null -> o
+    | host when Path.GetFileNameWithoutExtension host = "dotnet" -> { o with DotNetCliPath = host }
+    | _ -> o
 
 // Fake's binlog reader does not support the binlog format of current MSBuild versions
 let noBinLog (p: MSBuild.CliArguments) = { p with DisableInternalBinLog = true }
