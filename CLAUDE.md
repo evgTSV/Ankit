@@ -236,6 +236,18 @@ rustfmt defaults (`cargo fmt`), one `use` per item as Anki does, doc comments on
 - Binding an empty query string throws inside Oxpecker; `bindOrDeclineQuery` works around it by validating an empty
   model.
 
+**Docker** (`src/Ankit.Server/Dockerfile`, used by `./build Run` / `compose.yaml`)
+
+- Alpine images (`sdk:10.0-alpine` builds, `aspnet:10.0-alpine` runs), so the native library is built for musl in the
+  image itself, through the same build-script targets CI runs. It must never come from the host.
+- Grpc.Tools' `protoc` is a glibc binary: the build stage installs `gcompat` + `libstdc++` to run it.
+- musl targets link the C runtime statically by default, which can't produce a `cdylib`;
+  `src/rslib-bindings/.cargo/config.toml` disables `crt-static` for musl only.
+- Rider's Docker "fast mode" runs the host build in the container and can't work: the host has no musl
+  `libankit_rslib.so`. Use regular mode or `./build Run`.
+- Alpine .NET images use invariant globalization (no ICU).
+- The first build compiles rslib (several minutes); cache mounts keep cargo's registry and `target` between builds.
+
 **Windows**
 
 - FAKE could resolve `dotnet` to a bare `dotnet.exe` and put an empty entry at the start of `PATH`, which makes

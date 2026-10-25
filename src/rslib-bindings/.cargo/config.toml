@@ -4,3 +4,7 @@ PROTOC = { value = "tools/protoc/bin/protoc", relative = true }
 # Descriptor set of Anki's protos, written by rslib's build scripts. Kept at a stable path so that
 # Ankit.Native can generate its client (service and method indices) from it
 DESCRIPTORS_BIN = { value = "target/anki_descriptors.bin", relative = true }
+
+# musl targets (Alpine) link the C runtime statically by default, which rules out building a cdylib
+[target.'cfg(target_env = "musl")']
+rustflags = ["-C", "target-feature=-crt-static"]
