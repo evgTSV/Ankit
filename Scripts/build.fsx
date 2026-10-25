@@ -481,6 +481,10 @@ Target.create "Before-Push" doNothing
     "Verify-Format"
 ]
 
+
+"Format" ?=> "Verify-Format"
+"Remove-BOM" ?=> "Verify-Encoding"
+
 "Before-Push" <== [
     "Test"
     "Prepare-Sources"

@@ -36,7 +36,6 @@ let workflow = [
     let buildTargetStep (name: string) (target: string) =
         buildCliStep name $"--single-target {target}"
 
-    // Pinned: 10.0.x resolves to 10.0.403, which is listed but can't be downloaded (HTTP 409). Back to 10.0.x once it can
     let dotnetVersion = "10.0.402"
 
     let checkoutAction = Auto "actions/checkout"
