@@ -23,7 +23,7 @@ jobs:
     - name: Set up .NET SDK
       uses: actions/setup-dotnet@v6
       with:
-        dotnet-version: 10.0.x
+        dotnet-version: 10.0.402
     - name: Verify sources
       run: dotnet fsi Scripts/build.fsx -- --no-logo Verify-Sources
   build:
@@ -45,7 +45,7 @@ jobs:
     - name: Set up .NET SDK
       uses: actions/setup-dotnet@v6
       with:
-        dotnet-version: 10.0.x
+        dotnet-version: 10.0.402
     - name: Cache Cargo
       uses: actions/cache@v6
       with:

@@ -23,3 +23,12 @@
 **/values.dev.yaml
 LICENSE
 README.md
+# Restored and generated on the host, the image restores and generates its own
+packages
+paket-files
+coverage-results
+src/rslib-bindings/target
+src/rslib-bindings/tools
+src/rslib-bindings/include
+src/Ankit.Native/Generated
+**/TestResults

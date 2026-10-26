@@ -8,7 +8,12 @@
   <ItemGroup>
     <Compile Include="AnkiSyncServer.fs" />
     <Compile Include="TempCollection.fs" />
+    <Compile Include="CommandAssert.fs" />
     <Compile Include="SyncServiceTests.fs" />
+    <Compile Include="DeckServiceTests.fs" />
+    <Compile Include="NoteServiceTests.fs" />
+    <Compile Include="NotetypeServiceTests.fs" />
+    <Compile Include="AnkiSyncWorkerTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -23,21 +23,38 @@ In Docker the collection lives in `/app/data`, mount a volume there to keep it w
 
 ## API
 
-| Endpoint          | Body                                                             | Success |
-|-------------------|------------------------------------------------------------------|---------|
-| `GET /ping`       |                                                                  | `200`   |
-| `POST /decks`     | `{ "name": "Parent::Child" }`                                    | `204`   |
-| `POST /notes`     | `{ "deckId": 1, "noteTypeId": 1, "fields": ["front", "back"], "tags": ["optional"] }` | `204` |
-| `POST /sync/full` | `{ "direction": "upload" }` or `{ "direction": "download" }`     | `204`   |
+| Endpoint                | Body or query                                                    | Success                 |
+|-------------------------|------------------------------------------------------------------|-------------------------|
+| `GET /ping`             |                                                                  | `200`                   |
+| `GET /decks`            |                                                                  | `200` `[{ "id", "name" }]` |
+| `POST /decks`           | `{ "name": "Parent::Child" }`                                    | `201` `{ "id" }`        |
+| `PUT /decks/{id}`       | `{ "name": "New::Name" }`                                        | `204`                   |
+| `DELETE /decks/{id}`    |                                                                  | `204`                   |
+| `GET /note-types`       |                                                                  | `200` `[{ "id", "name", "fields" }]` |
+| `GET /notes?query=…`    | Anki search, e.g. `query=deck:Japanese tag:verb`; `deck:*` for all | `200` `[id, …]`       |
+| `GET /notes/{id}`       |                                                                  | `200` `{ "id", "noteTypeId", "fields", "tags" }` |
+| `POST /notes`           | `{ "deckId": 1, "noteTypeId": 1, "fields": ["front", "back"], "tags": ["optional"] }` | `201` `{ "id" }` |
+| `PUT /notes/{id}`       | `{ "fields": ["front", "back"], "tags": ["optional"] }`          | `204`                   |
+| `DELETE /notes/{id}`    |                                                                  | `204`                   |
+| `POST /sync/full`       | `{ "direction": "upload" }` or `{ "direction": "download" }`     | `204`                   |
 
-`fields` holds one value per field of the note type, in its order. Deck and note commands answer once they are applied
-to the local collection, without waiting for the sync; `/sync/full` answers when the full sync is done.
+The OpenAPI description of the API is served at `GET /openapi/v1.json`, and Swagger UI at `/swagger` to browse and
+try the endpoints. Union values such as `direction` are case-insensitive (`upload`, `UPLOAD`).
+
+`fields` holds one value per field of the note type, in its order; `GET /note-types` lists them. `PUT /notes/{id}`
+keeps the tags when `tags` is left out. Deleting a deck deletes its child decks and all of their cards; the default
+deck stays: its cards are deleted and its name is reset. Deleting a note deletes its cards.
+
+Changes answer once they are applied to the local collection, without waiting for the sync; `/sync/full` answers when
+the full sync is done. Reads don't trigger a sync.
 
 Errors are JSON with `code`, `message`, `traceId`, `timestamp` and `path`:
 
-- `422` with `fieldErrors` (`field`, `issue`, `rejectedValue`) when the body fails validation
-- `422` without them when rslib rejects the command, for example a wrong number of fields or an unknown deck
-- `400` when the body is not valid JSON
+- `404` when the deck or note in the URL doesn't exist
+- `422` with `fieldErrors` (`field`, `issue`, `rejectedValue`) when the body or query fails validation
+- `422` without them when rslib rejects the command, for example a wrong number of fields, an unknown or filtered
+  deck, an unknown note type or a malformed search
+- `400` when the body is not valid JSON or an id in the URL is not a number
 - `502` when a full sync fails
 - `503` when the server shuts down before applying the command
 

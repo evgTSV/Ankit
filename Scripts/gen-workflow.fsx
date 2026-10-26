@@ -36,7 +36,7 @@ let workflow = [
     let buildTargetStep (name: string) (target: string) =
         buildCliStep name $"--single-target {target}"
 
-    let dotnetVersion = "10.0.x"
+    let dotnetVersion = "10.0.402"
 
     let checkoutAction = Auto "actions/checkout"
     let dotnetSetupAction = Auto "actions/setup-dotnet"
