@@ -17,6 +17,7 @@
     <Compile Include="AnkiSyncWorkerTests.fs" />
     <Compile Include="AuthTests.fs" />
     <Compile Include="ApiKeyEndpointTests.fs" />
+    <Compile Include="JsonTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

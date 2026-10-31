@@ -198,7 +198,8 @@ Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services
   fix F# types: options, fieldless unions (string enums), non-option record fields (not nullable). Check the
   generated spec after adding a route or DTO.
 - **DTOs** (`Dto.fs`): `[<CLIMutable>]` records with DataAnnotations (`Required`, `MinLength`, custom `NumericId`).
-  JSON is camelCase (`Utils.jsonOptions`); options are skippable; fieldless unions are written as their case name in
+  JSON is camelCase (`Utils.jsonOptions`); an option field may be missing or `null` (both read as `None`, and
+  `None` is not written); fieldless unions are written as their case name in
   `SNAKE_UPPER` (`Utils.unionTagNaming`) and read case-insensitively (`"direction": "upload"` works). Conversions
   between DTOs and service types belong in `Handlers.fs`, because `Dto.fs` compiles before `Services.fs`.
 - **Responses**: create → `201 {"id"}`, update/delete → `204`, reads → `200` JSON, errors → `ApiError` JSON

@@ -10,7 +10,8 @@ let unionTagNaming = JsonNamingPolicy.SnakeCaseUpper
 let jsonOptions =
     let opts = JsonSerializerOptions()
     opts.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
-    opts.DefaultIgnoreCondition <- JsonIgnoreCondition.Never
+    // With FromJsonSerializerOptions this makes null and a missing field both read as None, and None is not written
+    opts.DefaultIgnoreCondition <- JsonIgnoreCondition.WhenWritingNull
     opts.AllowDuplicateProperties <- false
     opts.AllowTrailingCommas <- false
     opts.PropertyNameCaseInsensitive <- true
@@ -24,7 +25,7 @@ let jsonOptions =
         .WithUnionNamedFields()
         .WithUnionTagName("code")
         .WithUnionInternalTag()
-        .WithSkippableOptionFields()
+        .WithSkippableOptionFields(SkippableOptionFields.FromJsonSerializerOptions)
         .AddToJsonSerializerOptions(opts)
 
     opts
