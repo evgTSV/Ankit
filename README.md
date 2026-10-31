@@ -15,7 +15,9 @@ also the MSVC build tools). The build is driven by `./build` (`build.cmd` on Win
 ./build Run  # start the server in Docker on port 5000
 ```
 
-Set the sync account before running the server, for example with `SyncServer__Username` and `SyncServer__Password`.
+Set the sync account before running the server, for example with `SyncServer__Username` and `SyncServer__Password`,
+and an API key for each client, see [Authentication](docs/server.md#authentication); `./build Run` reads these
+variables from a `.env` file in the repository root.
 On a fresh account, call `POST /sync/full` once to start syncing, see [First sync](docs/server.md#first-sync).
 
 ## Documentation

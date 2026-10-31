@@ -39,6 +39,8 @@ type AnkiSyncWorkerTests() =
         let value = {
             SyncDebounceTime = int64 debounce.TotalMilliseconds
             CollectionPath = ""
+            ApiKeys = [||]
+            DisableAuth = false
         }
 
         {

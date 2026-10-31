@@ -4,5 +4,8 @@ services:
     build:
       context: .
       dockerfile: src/Ankit.Server/Dockerfile
+    env_file:
+      - path: .env
+        required: false
     ports:
       - "5000:5000"

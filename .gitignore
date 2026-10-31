@@ -9,3 +9,4 @@ coverage-results/
 *.user
 .idea
 /src/Ankit.Native/Generated/
+.env
