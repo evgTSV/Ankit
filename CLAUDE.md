@@ -20,7 +20,7 @@ Ankit.Server (F#, Oxpecker)      HTTP API, services, background sync worker
 |-----------------------------------|-------------------------------------------------------------------------------|
 | `src/rslib-bindings/`             | Rust crate `ankit-rslib` (cdylib) + `csharp-gen` and `header-gen` generators  |
 | `src/Ankit.Native/`               | C# wrapper: `RslibBackend`, `RslibException`/`BackendException`, `Interop/`   |
-| `src/Ankit.Server/`               | F# server: `Dto`, `Services`, `AnkiSyncWorker`, `Handlers`, `ErrorHandler`, `Program` |
+| `src/Ankit.Server/`               | F# server: `Dto`, `Services`, `AnkiSyncWorker`, `Handlers`, `Auth`, `ErrorHandler`, `Program` |
 | `tests/Ankit.Native.Tests/`       | xunit (C#) tests of the wrapper against a temp collection                     |
 | `tests/Ankit.Server.Tests/`       | xunit (F#) tests of services, worker, and sync against a Dockerized sync server |
 | `src/rslib-bindings/tests/ffi.rs` | Rust tests of the C ABI                                                       |
@@ -53,6 +53,7 @@ Without a target `All` runs (Prepare, Build, Test, Test-Rslib). Options: `-c Deb
 | **Before every commit / push**         | `./build Before-Push`                     |
 | Regenerate CI workflow                 | `./build Gen-Workflow`                    |
 | Run server in Docker (port 5000)       | `./build Run`, stop with `./build Stop`   |
+| Create an API key for a client         | `./build --key-name <name> New-Api-Key`   |
 | Everything gone, start over            | `./build -f Clean` then `./build Prepare` |
 
 ### Generated, not committed
@@ -142,7 +143,7 @@ Fine for quick iteration once `Prepare` has run:
 ### Ankit.Server (F#)
 
 Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services` → `AnkiSyncWorker` → `ErrorHandler` →
-`Handlers` → `ApiDocs` → `Program`. A new file must be added to the `.fsproj` in the right position.
+`Handlers` → `Auth` → `ApiDocs` → `Program`. A new file must be added to the `.fsproj` in the right position.
 
 - **Services** (`Services.fs`): interface + `Anki*` implementation taking `RslibBackend` (and others) by constructor,
   registered as singletons in `Program.fs`. `IErrorTextService`, `IAuthService`, `ISyncService`, `IDeckService`,
@@ -163,6 +164,11 @@ Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services
 - **Handlers** (`Handlers.fs`): `query` for reads, `change` for writes, `submit` for full sync. Bind bodies with
   `ModelBinder.bindOrDeclineJson` / `bindOrDeclineJson1` (with a route value) / `bindOrDeclineQuery`; they validate
   DataAnnotations and answer 422 with `fieldErrors`. Routes live in `Program.fs` (`routef "/notes/{%d}"` for `int64`).
+- **Auth** (`Auth.fs`): API keys from `Ankit:ApiKeys` (name + `sha256:` hash, created with `./build
+  --key-name <name> New-Api-Key`), checked by the `ApiKey` authentication scheme. Endpoints are public unless wrapped in
+  `requireApiKey` (a route or a whole `GET [ ... ]` group), which adds the policy and the OpenAPI security
+  requirement; every route except `/ping` gets it. `ApiKeyStore.load` validates the keys at startup and the server
+  refuses to start without one unless `Ankit:DisableAuth` is set.
 - **OpenAPI** (`ApiDocs.fs`, served at `/openapi/v1.json` via Oxpecker.OpenApi + Microsoft.AspNetCore.OpenApi;
   Swagger UI at `/swagger` from `Swashbuckle.AspNetCore.SwaggerUI`, which only serves the UI for that spec):
   every route in `Program.fs` must end with `|> describe "<OperationId>" "<summary>" <request type option>

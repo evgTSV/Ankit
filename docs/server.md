@@ -13,6 +13,8 @@ between section and key (for example `SyncServer__Password`).
 | `Urls`                     | `http://0.0.0.0:5000`   | Addresses the server listens on                          |
 | `Ankit:CollectionPath`     | `data/collection.anki2` | Collection file, relative to the working directory; the media folder and database are kept next to it |
 | `Ankit:SyncDebounceTime`   | `5000`                  | Milliseconds to collect changes before syncing them      |
+| `Ankit:ApiKeys`            | (empty)                 | Clients allowed to use the API: `[{ "Name", "Hash" }]`, see [Authentication](#authentication) |
+| `Ankit:DisableAuth`        | `false`                 | Let anyone use the API without a key, for local development only |
 | `SyncServer:Host`          | `localhost`             | Sync server host                                         |
 | `SyncServer:Port`          | `8080`                  | Sync server port                                         |
 | `SyncServer:UseHttps`      | `false`                 | Connect to the sync server over HTTPS                    |
@@ -20,6 +22,35 @@ between section and key (for example `SyncServer__Password`).
 | `SyncServer:Password`      | (empty)                 | Sync account password, set it through the environment    |
 
 In Docker the collection lives in `/app/data`, mount a volume there to keep it when the container is recreated.
+`./build Run` (`docker compose`) passes the variables in a `.env` file in the repository root to the container.
+
+## Authentication
+
+Every endpoint except `GET /ping`, the OpenAPI description and Swagger UI requires an API key, sent as
+`Authorization: Bearer <key>`. Requests without a valid key get `401` with a `WWW-Authenticate: Bearer` header.
+
+Give each client its own key, so one can be revoked by removing its entry. Create a key with:
+
+```bash
+./build --key-name firefox-extension New-Api-Key   # build.cmd on Windows
+```
+
+It prints the key, to hand to the client, and the entry to configure. The server stores only the key's SHA-256 hash,
+so the key can't be recovered from the configuration; create a new one if it's lost.
+
+```json
+"Ankit": {
+  "ApiKeys": [
+    { "Name": "firefox-extension", "Hash": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08" }
+  ]
+}
+```
+
+or `Ankit__ApiKeys__0__Name` and `Ankit__ApiKeys__0__Hash` (`1`, `2`, … for more keys) in the environment. The server
+doesn't start without a key unless `Ankit:DisableAuth` is `true`, and it checks the entries at startup. Keys travel in
+every request: outside localhost, serve the API over HTTPS, for example behind a reverse proxy.
+
+In Swagger UI, use **Authorize** to enter a key; it is kept across page reloads.
 
 ## API
 
@@ -55,6 +86,7 @@ Errors are JSON with `code`, `message`, `traceId`, `timestamp` and `path`:
 - `422` without them when rslib rejects the command, for example a wrong number of fields, an unknown or filtered
   deck, an unknown note type or a malformed search
 - `400` when the body is not valid JSON or an id in the URL is not a number
+- `401` when the API key is missing or not configured
 - `502` when a full sync fails
 - `503` when the server shuts down before applying the command
 

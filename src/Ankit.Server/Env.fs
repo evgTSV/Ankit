@@ -13,9 +13,17 @@ let tryGetEnvOrDefault (key: string) (defaultValue: string) : string = tryGetEnv
 let AnkitServerSettingsSection = "Ankit"
 
 [<CLIMutable>]
+type ApiKeySettings = {
+    Name: string
+    Hash: string
+}
+
+[<CLIMutable>]
 type AnkitServerSettings = {
     SyncDebounceTime: int64
     CollectionPath: string
+    ApiKeys: ApiKeySettings[]
+    DisableAuth: bool
 }
 
 [<Literal>]

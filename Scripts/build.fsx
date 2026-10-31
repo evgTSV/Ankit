@@ -9,6 +9,7 @@
 open System
 open System.IO
 open System.Runtime.InteropServices
+open System.Security.Cryptography
 open System.Text
 open System.Text.Unicode
 open Fake.Core
@@ -51,6 +52,7 @@ Options:
   -p, --parallel <jobs>       Number of targets to run in parallel (default: 1).
   -f, --full-clean            Perform removing files left after build process.
   -s, --single-target         Run only the target, without its dependencies.
+  --key-name <name>           Client name for New-Api-Key.
   -h, --help                  Show this help.
   --list                      List available targets.
   --no-logo                   Do not display the logo.
@@ -415,6 +417,33 @@ Target.create "Run" (fun _ ->
     dockerCompose [ "up"; "--build"; "--detach" ] |> handleResult "Run")
 
 Target.create "Stop" (fun _ -> dockerCompose [ "down" ] |> handleResult "Stop")
+
+Target.create "New-Api-Key" (fun _ ->
+    let name =
+        match DocoptResult.tryGetArgument "--key-name" cli with
+        | Some name when not (String.IsNullOrWhiteSpace name) -> name
+        | _ -> failwith "New-Api-Key needs the client's name: ./build --key-name <name> New-Api-Key"
+
+    let key = "ankit_" + Convert.ToHexStringLower(RandomNumberGenerator.GetBytes 32)
+    let hash = "sha256:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes key))
+
+    let printData (lines: string list) =
+        let previous = Console.ForegroundColor
+        Console.ForegroundColor <- ConsoleColor.Cyan
+
+        try
+            Console.WriteLine()
+            lines |> List.iter Console.WriteLine
+            Console.WriteLine()
+        finally
+            Console.ForegroundColor <- previous
+
+    Trace.log $"API key for \"%s{name}\", give it to the client, it isn't stored anywhere:"
+    printData [ key ]
+    Trace.log "Add its hash to Ankit:ApiKeys in appsettings.json:"
+    printData [ $"{{ \"Name\": \"%s{name}\", \"Hash\": \"%s{hash}\" }}" ]
+    Trace.log "or to the environment (or .env), with the next free index instead of 0:"
+    printData [ $"Ankit__ApiKeys__0__Name=%s{name}"; $"Ankit__ApiKeys__0__Hash=%s{hash}" ])
 
 Target.create "Prepare" doNothing
 Target.create "Build" doNothing
