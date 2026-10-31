@@ -142,12 +142,12 @@ Fine for quick iteration once `Prepare` has run:
 
 ### Ankit.Server (F#)
 
-Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services` → `AnkiSyncWorker` → `ErrorHandler` →
+Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services` → `Llm` → `AnkiSyncWorker` → `ErrorHandler` →
 `Handlers` → `Auth` → `ApiDocs` → `Program`. A new file must be added to the `.fsproj` in the right position.
 
 - **Services** (`Services.fs`): interface + `Anki*` implementation taking `RslibBackend` (and others) by constructor,
   registered as singletons in `Program.fs`. `IErrorTextService`, `IAuthService`, `ISyncService`, `IDeckService`,
-  `INoteService`, `INotetypeService`.
+  `INoteService`, `INotetypeService`, `ICardSuggestionService` (in `Llm.fs`).
 - **Errors are values.** Services catch only expected backend exceptions with `ServiceUtils.guardCall` /
   `guardCommand` / `guardCallSync` and return `Result`; genuine bugs propagate (`reraise ()`) to
   `ErrorHandler.errorHandler` (500). Error unions are `[<RequireQualifiedAccess>]`:
@@ -164,6 +164,17 @@ Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services
 - **Handlers** (`Handlers.fs`): `query` for reads, `change` for writes, `submit` for full sync. Bind bodies with
   `ModelBinder.bindOrDeclineJson` / `bindOrDeclineJson1` (with a route value) / `bindOrDeclineQuery`; they validate
   DataAnnotations and answer 422 with `fieldErrors`. Routes live in `Program.fs` (`routef "/notes/{%d}"` for `int64`).
+- **Card suggestions** (`Llm.fs`): `ICardSuggestionService` drafts notes with an `IChatClient`
+  (Microsoft.Extensions.AI) over the OpenAI SDK, so any OpenAI-compatible endpoint works (`Llm` section). It reads
+  the collection directly and never goes through the worker: an LLM call takes seconds and the worker runs jobs one
+  at a time. The JSON schema is built per note type from its field names; answers are parsed leniently (outermost
+  `{...}`), sanitized (`CardHtml.sanitize`, the context is untrusted web text) and filtered (cloze note types need a
+  deletion, `GUIDED_CLOZE` a hint in every deletion, `AUTO` only a deletion; note types without cloze reject
+  deletions, and `COLLOCATION_IN_CONTEXT`, their style, needs a front and a back; `CardStyle` is in `Dto.fs`, which
+  `Llm.fs` uses directly like `SyncDirection`). `LlmClient.create` validates the settings at startup; without
+  `Llm:Model` the route answers 503.
+  The OpenAI client throws an `AggregateException` of its attempts after retries, `(|LlmError|_|)` unwraps it.
+  Service tests use a fake `IChatClient` (`CardSuggestionServiceTests`).
 - **Auth** (`Auth.fs`): API keys from `Ankit:ApiKeys` (name + `sha256:` hash, created with `./build
   --key-name <name> New-Api-Key`), checked by the `ApiKey` authentication scheme. Endpoints are public unless wrapped in
   `requireApiKey` (a route or a whole `GET [ ... ]` group), which adds the policy and the OpenAPI security

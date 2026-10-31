@@ -7,6 +7,7 @@ open System.Threading.Channels
 open Anki.Collection
 open Ankit.Server
 open Ankit.Server.Auth
+open Ankit.Server.Llm
 open Ankit.Server.Handlers.ModelBinder
 open Ankit.Server.Env
 open Ankit.Server.Services
@@ -50,6 +51,10 @@ let endpoints = [
         route "/notes" <| bindOrDeclineJson Handlers.addNote
         |> describe "AddNote" "Add a note to a normal deck"
             (Some typeof<AddNoteDto>) [ created; invalid; shuttingDown ]
+
+        route "/notes/suggestions" <| bindOrDeclineJson Handlers.suggestNotes
+        |> describe "SuggestNotes" "Draft notes about a term in its context with the LLM, without adding them"
+            (Some typeof<SuggestNotesDto>) [ ok<SuggestionsDto>; invalid; llmFailed; llmOff ]
 
         route "/sync/full" <| bindOrDeclineJson Handlers.fullSync
         |> describe "FullSync" "Replace the server's collection with the local one (upload) or the other way round (download)"
@@ -96,7 +101,7 @@ let openBackend (sp: IServiceProvider) : RslibBackend =
 
     backend
 
-let configureServices (configuration: IConfiguration) (apiKeys: ApiKeyStore) (services: IServiceCollection) =
+let configureServices (configuration: IConfiguration) (apiKeys: ApiKeyStore) (llm: LlmClient) (services: IServiceCollection) =
     services
         .Configure<AnkitServerSettings>(configuration.GetSection AnkitServerSettingsSection)
         .Configure<SyncServerSettings>(configuration.GetSection SyncServerSettingsSection)
@@ -122,6 +127,8 @@ let configureServices (configuration: IConfiguration) (apiKeys: ApiKeyStore) (se
         .AddSingleton<IDeckService, AnkiDeckService>()
         .AddSingleton<INoteService, AnkiNoteService>()
         .AddSingleton<INotetypeService, AnkiNotetypeService>()
+        .AddSingleton<LlmClient>(llm)
+        .AddSingleton<ICardSuggestionService, AnkiCardSuggestionService>()
         .AddHostedService<AnkiSyncWorker>()
     |> addApiKeyAuth apiKeys
 
@@ -148,11 +155,22 @@ let apiKeys =
         eprintfn $"%s{message}"
         exit 1
 
-configureServices builder.Configuration apiKeys builder.Services
+let llm =
+    match LlmClient.create (builder.Configuration.GetSection(LlmSettingsSection).Get<LlmSettings>()) with
+    | Ok llm -> llm
+    | Error message ->
+        eprintfn $"%s{message}"
+        exit 1
+
+configureServices builder.Configuration apiKeys llm builder.Services
 
 let app = builder.Build()
 configureApp app
 app.MapOpenApi() |> ignore
+
+match llm.Chat with
+| Some _ -> app.Logger.LogInformation("Card suggestions use {Model} at {Provider}", llm.Settings.Model, llm.Settings.Provider)
+| None -> app.Logger.LogInformation("Card suggestions are off, Llm:Model is empty")
 
 if apiKeys.IsDisabled then
     app.Logger.LogWarning("Ankit:DisableAuth is set, the API is open to anyone who can reach it")

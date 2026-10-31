@@ -42,3 +42,27 @@ type SyncServerSettings = {
         UriBuilder(Host = this.Host, Port = this.Port, Scheme = if this.UseHttps then "https" else "http").ToString()
 
 let defaultLangs = [ "en" ]
+
+[<Literal>]
+let LlmSettingsSection = "Llm"
+
+/// How the model is asked for JSON; not every OpenAI-compatible server supports JSON schemas
+type LlmResponseFormat =
+    | JsonSchema = 0
+    | JsonObject = 1
+    | Prompt = 2
+
+[<CLIMutable>]
+type LlmSettings = {
+    /// Base URL of an OpenAI-compatible API, empty for OpenAI itself
+    Provider: string
+    ApiKey: string
+    /// Card suggestions are off while it's empty
+    Model: string
+    ResponseFormat: LlmResponseFormat
+    TimeoutSeconds: int
+    /// The learner's native language, for hints and explanations
+    NativeLanguage: string
+    /// Added to every prompt, e.g. the learner's native language or the style of the cards
+    Instructions: string[]
+}

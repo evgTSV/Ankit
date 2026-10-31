@@ -5,6 +5,7 @@ open System.Threading.Channels
 open System.Threading.Tasks
 open Ankit.Server
 open Ankit.Server.Dto
+open Ankit.Server.Llm
 open Ankit.Server.Services
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Logging
@@ -165,6 +166,48 @@ let deleteNote (noteId: int64) : EndpointHandler =
         let notes = ctx.GetService<INoteService>()
         change (fun () -> notes.Delete noteId) (fun () -> noContent) ctx
 
+let suggestNotes (dto: SuggestNotesDto) : EndpointHandler =
+    fun ctx ->
+        task {
+            let suggestions = ctx.GetService<ICardSuggestionService>()
+
+            let request = {
+                Term = dto.Term.Trim()
+                Context = dto.Context
+                Source = dto.Source
+                NotetypeId = dto.NoteTypeId
+                DeckId = dto.DeckId
+                Count = dto.Count |> Option.defaultValue 1
+                Style = dto.Style
+                Instructions = dto.Instructions |> Option.map List.ofArray |> Option.defaultValue []
+            }
+
+            match! suggestions.Suggest(request, ctx.RequestAborted) with
+            | Ok suggested ->
+                let dto = {
+                    NoteTypeId = request.NotetypeId
+                    Notes =
+                        suggested.Notes
+                        |> List.map (fun fields -> { Fields = Array.ofList fields })
+                        |> Array.ofList
+                    ExistingNoteIds = Array.ofList suggested.ExistingNoteIds
+                }
+
+                return! writeJson Status200OK dto ctx
+            | Error SuggestFailed.NotConfigured ->
+                return!
+                    writeError
+                        ctx
+                        Status503ServiceUnavailable
+                        "Card suggestions are off: set Llm:Model, and Llm:Provider for a provider other than OpenAI"
+                        None
+            | Error(SuggestFailed.Command error) -> return! writeCommandError ctx error
+            | Error(SuggestFailed.LlmFailed message) -> return! writeError ctx Status502BadGateway message None
+            | Error(SuggestFailed.InvalidOutput message) ->
+                return! writeError ctx Status502BadGateway $"The model's answer can't be used: %s{message}" None
+        }
+        :> Task
+
 // --- Note types ---
 
 let listNoteTypes: EndpointHandler =
@@ -175,6 +218,7 @@ let listNoteTypes: EndpointHandler =
             Id = notetype.Id
             Name = notetype.Name
             Fields = Array.ofList notetype.Fields
+            IsCloze = notetype.IsCloze
         }
 
         query notetypes.List (fun list -> writeJson Status200OK (list |> List.map toDto)) ctx

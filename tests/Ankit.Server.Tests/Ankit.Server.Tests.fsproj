@@ -13,6 +13,7 @@
     <Compile Include="DeckServiceTests.fs" />
     <Compile Include="NoteServiceTests.fs" />
     <Compile Include="NotetypeServiceTests.fs" />
+    <Compile Include="CardSuggestionServiceTests.fs" />
     <Compile Include="AnkiSyncWorkerTests.fs" />
     <Compile Include="AuthTests.fs" />
     <Compile Include="ApiKeyEndpointTests.fs" />

@@ -20,6 +20,13 @@ between section and key (for example `SyncServer__Password`).
 | `SyncServer:UseHttps`      | `false`                 | Connect to the sync server over HTTPS                    |
 | `SyncServer:Username`      | (empty)                 | Sync account, set it through the environment             |
 | `SyncServer:Password`      | (empty)                 | Sync account password, set it through the environment    |
+| `Llm:Provider`             | (empty)                 | Base URL of an OpenAI-compatible API, empty for OpenAI   |
+| `Llm:ApiKey`               | (empty)                 | Key for that API, set it through the environment; local servers need none |
+| `Llm:Model`                | (empty)                 | Model id; card suggestions are off while it's empty      |
+| `Llm:ResponseFormat`       | `JsonSchema`            | `JsonSchema`, `JsonObject` or `Prompt`, see [Card suggestions](#card-suggestions) |
+| `Llm:TimeoutSeconds`       | `60`                    | How long to wait for the model                           |
+| `Llm:NativeLanguage`       | (empty)                 | The learner's native language, e.g. `Russian`, used for hints and explanations |
+| `Llm:Instructions`         | `[]`                    | Rules added to every prompt, e.g. `["Explain in Russian", "Keep cards short"]`; `Llm__Instructions__0`, `__1`, … in the environment |
 
 In Docker the collection lives in `/app/data`, mount a volume there to keep it when the container is recreated.
 `./build Run` (`docker compose`) passes the variables in a `.env` file in the repository root to the container.
@@ -61,10 +68,11 @@ In Swagger UI, use **Authorize** to enter a key; it is kept across page reloads.
 | `POST /decks`           | `{ "name": "Parent::Child" }`                                    | `201` `{ "id" }`        |
 | `PUT /decks/{id}`       | `{ "name": "New::Name" }`                                        | `204`                   |
 | `DELETE /decks/{id}`    |                                                                  | `204`                   |
-| `GET /note-types`       |                                                                  | `200` `[{ "id", "name", "fields" }]` |
+| `GET /note-types`       |                                                                  | `200` `[{ "id", "name", "fields", "isCloze" }]` |
 | `GET /notes?query=…`    | Anki search, e.g. `query=deck:Japanese tag:verb`; `deck:*` for all | `200` `[id, …]`       |
 | `GET /notes/{id}`       |                                                                  | `200` `{ "id", "noteTypeId", "fields", "tags" }` |
 | `POST /notes`           | `{ "deckId": 1, "noteTypeId": 1, "fields": ["front", "back"], "tags": ["optional"] }` | `201` `{ "id" }` |
+| `POST /notes/suggestions` | `{ "term", "context", "noteTypeId", … }`, see [Card suggestions](#card-suggestions) | `200` `{ "notes": [{ "fields" }], "existingNoteIds" }` |
 | `PUT /notes/{id}`       | `{ "fields": ["front", "back"], "tags": ["optional"] }`          | `204`                   |
 | `DELETE /notes/{id}`    |                                                                  | `204`                   |
 | `POST /sync/full`       | `{ "direction": "upload" }` or `{ "direction": "download" }`     | `204`                   |
@@ -87,8 +95,82 @@ Errors are JSON with `code`, `message`, `traceId`, `timestamp` and `path`:
   deck, an unknown note type or a malformed search
 - `400` when the body is not valid JSON or an id in the URL is not a number
 - `401` when the API key is missing or not configured
-- `502` when a full sync fails
-- `503` when the server shuts down before applying the command
+- `502` when a full sync fails, or the LLM server fails or answers with nothing usable
+- `503` when the server shuts down before applying the command, or card suggestions are off
+
+## Card suggestions
+
+`POST /notes/suggestions` drafts notes about a term with an LLM. It takes the context the term was found in into
+account, for example the sentence or paragraph, so the cards are about the sense meant there. Nothing is added to the
+collection: the client shows the drafts, the user edits or picks them, and adds them with `POST /notes`.
+
+```json
+{
+  "term": "bank",
+  "context": "We had a picnic on the bank of the river.",
+  "source": "A walk in the park",
+  "noteTypeId": 1700000000000,
+  "deckId": 1,
+  "count": 2,
+  "style": "guided_cloze",
+  "instructions": ["add the pronunciation", "no idioms"]
+}
+```
+
+Only `term` and `noteTypeId` are required. The answer has one value per field of the note type in its order, and the
+ids of notes that already contain the term:
+
+```json
+{
+  "noteTypeId": 1700000000000,
+  "notes": [{ "fields": ["A picnic on the {{c1::bank}} of the river", "the land beside a river"] }],
+  "existingNoteIds": [1700000000123]
+}
+```
+
+`style` picks how the notes are written. For a cloze note type (`isCloze` in `GET /note-types`):
+
+- `CLOZE` (the default): the term hidden in a sentence, `{{c1::bank}}`, with a hint only when it helps.
+- `GUIDED_CLOZE`: for a high-value word (a verb, adjective or adverb) best learned in its natural context. Every
+  deletion has a hint that identifies the word uniquely, so no close synonym fits it, in `Llm:NativeLanguage` or in
+  simple words of the language being learned: `{{c1::bank::берег реки}}`. The back of the card (`Back Extra`) has
+  the full sentence, the IPA of the word and its common collocation. Drafts with a deletion without a hint are
+  dropped.
+- `AUTO`: the model picks `GUIDED_CLOZE` for a high-value word and `CLOZE` for any other term, note by note. Every
+  draft needs a cloze deletion, hints are up to the model.
+
+For a note type with a front and a back, such as Basic:
+
+- Without `style`, a plain card: question on the front, answer on the back.
+- `COLLOCATION_IN_CONTEXT`: teaches which words the term combines with. The front has a natural sentence with a
+  common collocation of the term in bold, `She <b>made a decision</b> quickly.`, the back the collocation, its
+  meaning (in `Llm:NativeLanguage` or in simple words) and one more example sentence. Drafts without both a front
+  and a back are dropped.
+- `AUTO`: the model picks `COLLOCATION_IN_CONTEXT` when what's worth learning about the term is the words it
+  combines with, and a plain card otherwise.
+
+A style for the other kind of note type is rejected with `422`, and drafts for a note type without cloze that
+contain cloze deletions are dropped, Anki would show them as they are.
+
+The prompt includes the notes that contain the term, so the model doesn't repeat them, and the three most recent
+notes of the note type (in `deckId`, when given) as examples of your style. The context is treated as untrusted:
+the model is told not to follow instructions in it, and fields keep only `<b>`, `<i>`, `<u>`, `<br>` and a few
+similar tags without attributes, any other markup is escaped.
+
+The server talks to any API that implements OpenAI's chat completions, so the model can come from a hosted provider
+or run locally:
+
+| Provider            | `Llm:Provider`                  |
+|---------------------|---------------------------------|
+| OpenAI              | (empty)                         |
+| OpenRouter          | `https://openrouter.ai/api/v1`  |
+| Ollama              | `http://localhost:11434/v1`, from the Docker container `http://host.docker.internal:11434/v1` |
+| LM Studio           | `http://localhost:1234/v1`      |
+
+`Llm:ResponseFormat` says how the model is held to the shape of the answer. `JsonSchema` (the default) sends a strict
+JSON schema built from the note type's fields, which is the most reliable. For a server that rejects or ignores it,
+use `JsonObject` (JSON mode without a schema) or `Prompt`, which only describes the shape in the prompt and also
+accepts JSON wrapped in Markdown fences.
 
 ## First sync
 

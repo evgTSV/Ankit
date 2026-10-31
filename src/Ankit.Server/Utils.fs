@@ -29,6 +29,16 @@ let jsonOptions =
 
     opts
 
+/// For an optional count, None passes
+type CountRangeAttribute(min: int, max: int) =
+    inherit ValidationAttribute($"Must be between {min} and {max}")
+
+    override this.IsValid(value) =
+        match value with
+        | :? option<int> as count -> count |> Option.forall (fun n -> n >= min && n <= max)
+        | :? int as n -> n >= min && n <= max
+        | _ -> true
+
 type NumericIdAttribute() =
     inherit ValidationAttribute("Must be a positive id")
 
@@ -36,4 +46,5 @@ type NumericIdAttribute() =
         match value with
         | :? int64 as i -> i >= 1L
         | :? int32 as i -> i >= 1
+        | :? option<int64> as id -> id |> Option.forall (fun i -> i >= 1L)
         | _ -> true

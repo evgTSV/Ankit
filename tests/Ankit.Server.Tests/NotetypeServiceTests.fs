@@ -25,5 +25,28 @@ type NotetypeServiceTests() =
 
             Assert.Equal(byName, nt.Id)
 
+    [<Fact>]
+    member _.``Cloze note types are marked as cloze``() =
+        let listed = ok (notetypes.List())
+
+        Assert.Equal<string list>(
+            [ "Cloze"; "Image Occlusion" ],
+            listed |> List.filter _.IsCloze |> List.map _.Name |> List.sort
+        )
+
+    [<Fact>]
+    member _.``Note type is read by id``() =
+        let cloze =
+            collection.Backend.GetNotetypeIdByName(Anki.Generic.String(Val = "Cloze")).Ntid
+
+        let notetype = ok (notetypes.Get cloze)
+
+        Assert.Equal("Cloze", notetype.Name)
+        Assert.Equal<string list>([ "Text"; "Back Extra" ], notetype.Fields)
+        Assert.True(notetype.IsCloze)
+
+    [<Fact>]
+    member _.``Missing note type is not found``() = notFound (notetypes.Get 424242L)
+
     interface IDisposable with
         member _.Dispose() = (collection :> IDisposable).Dispose()

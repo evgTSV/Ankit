@@ -70,6 +70,58 @@ type NoteTypeDto = {
     Id: int64
     Name: string
     Fields: string array
+    IsCloze: bool
+}
+
+type CardStyle =
+    /// The term hidden in a sentence, a hint only when it helps
+    | Cloze
+    /// For a high-value word (verb, adjective, adverb): a hint that identifies it uniquely, and the full sentence,
+    /// IPA and common collocation on the back
+    | GuidedCloze
+    /// Not a cloze: a sentence with a common collocation of the term in bold on the front, the collocation, its
+    /// meaning and another example on the back
+    | CollocationInContext
+    | Auto
+
+[<CLIMutable>]
+type SuggestNotesDto = {
+    /// The word or phrase to learn
+    [<Required(ErrorMessage = "Term is required"); MinLength(1, ErrorMessage = "Term must not be empty")>]
+    Term: string
+
+    /// Where the term was found, e.g. its sentence or paragraph; it decides which sense the cards are about
+    Context: string option
+
+    /// Title or URL of the page the context comes from
+    Source: string option
+
+    [<NumericId>]
+    NoteTypeId: int64
+
+    [<NumericId>]
+    DeckId: int64 option
+
+    /// How many alternative notes to suggest, 1 when left out
+    [<CountRange(1, 5)>]
+    Count: int option
+
+    Style: CardStyle option
+
+    /// Extra instructions for this request, e.g. "add the reading in hiragana"
+    Instructions: string array option
+}
+
+type SuggestedNoteDto = {
+    /// One value per field of the note type, in its order, ready for POST /notes
+    Fields: string array
+}
+
+type SuggestionsDto = {
+    NoteTypeId: int64
+    Notes: SuggestedNoteDto array
+    /// Notes that already contain the term, in any note type
+    ExistingNoteIds: int64 array
 }
 
 type SyncDirection =
