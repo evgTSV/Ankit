@@ -5,9 +5,9 @@ open System.ClientModel
 open System.Net.Http
 open System.Threading
 open System.Threading.Tasks
-open Ankit.Server.Dto
 open Ankit.Server.Env
 open Ankit.Server.Llm
+open Ankit.Server.Modules
 open Ankit.Server.Services
 open Ankit.Server.Tests.CommandAssert
 open Microsoft.Extensions.AI
@@ -27,7 +27,7 @@ type FakeChat(answer: unit -> string) =
             Task.FromResult(ChatResponse(ChatMessage(ChatRole.Assistant, answer ())))
 
         member _.GetStreamingResponseAsync(_, _, _) = raise (NotSupportedException())
-        member _.GetService(_, _) = null
+        member _.GetService(_, _) = raise (NotSupportedException())
         member _.Dispose() = ()
 
 type CardSuggestionServiceTests() =
@@ -47,9 +47,21 @@ type CardSuggestionServiceTests() =
         Model = "test-model"
         ResponseFormat = format
         TimeoutSeconds = 0
-        NativeLanguage = "Russian"
+        Module = "Language"
         Instructions = [| "Explain in Russian"; "Prefer everyday examples" |]
     }
+
+    let modules nativeLanguage =
+        match
+            SuggestionModules.create
+                [
+                    Language.create { NativeLanguage = nativeLanguage }
+                    SuggestionModule.general
+                ]
+                "language"
+        with
+        | Ok modules -> modules
+        | Error message -> failwith message
 
     let service (chat: IChatClient) format : ICardSuggestionService =
         let llm = {
@@ -57,7 +69,13 @@ type CardSuggestionServiceTests() =
             Settings = settings format
         }
 
-        AnkiCardSuggestionService(collection.Backend, notetypes, llm, NullLogger<AnkiCardSuggestionService>.Instance)
+        AnkiCardSuggestionService(
+            collection.Backend,
+            notetypes,
+            llm,
+            modules "Russian",
+            NullLogger<AnkiCardSuggestionService>.Instance
+        )
 
     let request notetypeId = {
         Term = "bank"
@@ -66,11 +84,12 @@ type CardSuggestionServiceTests() =
         NotetypeId = notetypeId
         DeckId = None
         Count = 1
+        Module = None
         Style = None
         Instructions = []
     }
 
-    let guided (request: SuggestRequest) = { request with Style = Some GuidedCloze }
+    let guided (request: SuggestRequest) = { request with Style = Some "GUIDED_CLOZE" }
 
     let suggest (chat: FakeChat) format request =
         (service chat format).Suggest(request, CancellationToken.None).Result
@@ -102,6 +121,7 @@ type CardSuggestionServiceTests() =
                 collection.Backend,
                 notetypes,
                 llm,
+                modules "Russian",
                 NullLogger<AnkiCardSuggestionService>.Instance
             )
             :> ICardSuggestionService
@@ -373,7 +393,7 @@ type CardSuggestionServiceTests() =
 
         let llm = {
             Chat = Some(chat :> IChatClient)
-            Settings = { settings LlmResponseFormat.JsonSchema with NativeLanguage = "" }
+            Settings = settings LlmResponseFormat.JsonSchema
         }
 
         let service =
@@ -381,6 +401,7 @@ type CardSuggestionServiceTests() =
                 collection.Backend,
                 notetypes,
                 llm,
+                modules "",
                 NullLogger<AnkiCardSuggestionService>.Instance
             )
             :> ICardSuggestionService
@@ -432,7 +453,7 @@ type CardSuggestionServiceTests() =
                 suggest chat LlmResponseFormat.JsonSchema {
                     request basic with
                         Term = "decision"
-                        Style = Some CollocationInContext
+                        Style = Some "COLLOCATION_IN_CONTEXT"
                         Count = 3
                 }
             )
@@ -449,12 +470,12 @@ type CardSuggestionServiceTests() =
 
         for expected in
             [
-                "collocations in context"
+                "Write every note as collocation in context"
                 "On the front"
                 "<b>bold</b>"
                 "its meaning in Russian, or in simple words"
                 "one more example sentence"
-                "Don't use cloze deletions"
+                "don't use cloze deletions"
             ] do
             Assert.Contains(expected, chat.Prompt)
 
@@ -464,7 +485,9 @@ type CardSuggestionServiceTests() =
     member _.``Collocation in context on a cloze note type is rejected without asking the model``() =
         let chat = new FakeChat(fun () -> clozeAnswer)
 
-        match suggest chat LlmResponseFormat.JsonSchema { request cloze with Style = Some CollocationInContext } with
+        match
+            suggest chat LlmResponseFormat.JsonSchema { request cloze with Style = Some "COLLOCATION_IN_CONTEXT" }
+        with
         | Error(SuggestFailed.Command(CommandFailed.Rejected message)) -> Assert.Contains("Basic", message)
         | other -> Assert.Fail $"Expected Rejected, got %A{other}"
 
@@ -491,7 +514,7 @@ type CardSuggestionServiceTests() =
             suggested (
                 suggest chat LlmResponseFormat.JsonSchema {
                     request cloze with
-                        Style = Some Auto
+                        Style = Some "AUTO"
                         Count = 2
                 }
             )
@@ -501,7 +524,7 @@ type CardSuggestionServiceTests() =
         for expected in
             [
                 "Choose the style of each note"
-                "Guided cloze, when"
+                "Guided cloze, for a high-value word"
                 "IPA"
                 "Plain cloze, for any other term"
             ] do
@@ -519,7 +542,7 @@ type CardSuggestionServiceTests() =
             suggested (
                 suggest chat LlmResponseFormat.JsonSchema {
                     request basic with
-                        Style = Some Auto
+                        Style = Some "AUTO"
                         Count = 2
                 }
             )
@@ -529,8 +552,8 @@ type CardSuggestionServiceTests() =
         for expected in
             [
                 "Choose the style of each note"
-                "Collocation in context, when"
-                "A plain card, for any other term"
+                "Collocation in context, for a term"
+                "Plain card, for any other term"
                 "don't use cloze deletions"
             ] do
             Assert.Contains(expected, chat.Prompt)
@@ -543,8 +566,71 @@ type CardSuggestionServiceTests() =
             suggest
                 (new FakeChat(fun () -> """{"notes": [{"Text": "A picnic on the bank", "Back Extra": ""}]}"""))
                 LlmResponseFormat.JsonSchema
-                { request cloze with Style = Some Auto }
+                { request cloze with Style = Some "AUTO" }
         )
+
+    [<Fact>]
+    member _.``Language module is the default and tells the model about the language``() =
+        let chat = new FakeChat(fun () -> clozeAnswer)
+
+        suggest chat LlmResponseFormat.JsonSchema (request cloze) |> suggested |> ignore
+
+        Assert.Contains("studies a foreign language", chat.Prompt)
+        Assert.Contains("native language is Russian", chat.Prompt)
+
+    [<Fact>]
+    member _.``General module has only the plain styles and no language in the prompt``() =
+        let chat = new FakeChat(fun () -> clozeAnswer)
+        let general (request: SuggestRequest) = { request with Module = Some "general" }
+
+        suggest chat LlmResponseFormat.JsonSchema (general (request cloze))
+        |> suggested
+        |> ignore
+
+        Assert.DoesNotContain("foreign language", chat.Prompt)
+        Assert.DoesNotContain("Russian, or", chat.Prompt)
+
+        suggest chat LlmResponseFormat.JsonSchema { general (request cloze) with Style = Some "AUTO" }
+        |> suggested
+        |> ignore
+
+        Assert.DoesNotContain("Choose the style", chat.Prompt)
+
+        match suggest chat LlmResponseFormat.JsonSchema (guided (general (request cloze))) with
+        | Error(SuggestFailed.Command(CommandFailed.Rejected message)) ->
+            Assert.Contains("GUIDED_CLOZE", message)
+            Assert.Contains("CLOZE, CARD, AUTO", message)
+        | other -> Assert.Fail $"Expected Rejected, got %A{other}"
+
+    [<Fact>]
+    member _.``Styles and modules are matched ignoring case and underscores``() =
+        let chat =
+            new FakeChat(fun () -> """{"notes": [{"Text": "the {{c1::bank::берег}}", "Back Extra": ""}]}""")
+
+        suggest chat LlmResponseFormat.JsonSchema {
+            request cloze with
+                Module = Some "Language"
+                Style = Some "GuidedCloze"
+        }
+        |> suggested
+        |> ignore
+
+        Assert.Contains("Write every note as guided cloze", chat.Prompt)
+
+    [<Fact>]
+    member _.``Unknown module is rejected without asking the model``() =
+        let chat = new FakeChat(fun () -> clozeAnswer)
+
+        match suggest chat LlmResponseFormat.JsonSchema { request cloze with Module = Some "medicine" } with
+        | Error(SuggestFailed.Command(CommandFailed.Rejected message)) -> Assert.Contains("LANGUAGE, GENERAL", message)
+        | other -> Assert.Fail $"Expected Rejected, got %A{other}"
+
+        Assert.Empty(chat.Requests)
+
+    [<Fact>]
+    member _.``Default module must exist``() =
+        Assert.True(Result.isError (SuggestionModules.create [ SuggestionModule.general ] "language"))
+        Assert.True(Result.isOk (SuggestionModules.create [ SuggestionModule.general ] "General"))
 
     interface IDisposable with
         member _.Dispose() = (collection :> IDisposable).Dispose()

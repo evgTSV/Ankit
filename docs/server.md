@@ -25,7 +25,8 @@ between section and key (for example `SyncServer__Password`).
 | `Llm:Model`                | (empty)                 | Model id; card suggestions are off while it's empty      |
 | `Llm:ResponseFormat`       | `JsonSchema`            | `JsonSchema`, `JsonObject` or `Prompt`, see [Card suggestions](#card-suggestions) |
 | `Llm:TimeoutSeconds`       | `60`                    | How long to wait for the model                           |
-| `Llm:NativeLanguage`       | (empty)                 | The learner's native language, e.g. `Russian`, used for hints and explanations |
+| `Llm:Module`               | `Language`              | Suggestion module used when a request names none, see [Modules and styles](#modules-and-styles) |
+| `Llm:Modules:Language:NativeLanguage` | (empty)      | The learner's native language, e.g. `Russian`, for hints and explanations |
 | `Llm:Instructions`         | `[]`                    | Rules added to every prompt, e.g. `["Explain in Russian", "Keep cards short"]`; `Llm__Instructions__0`, `__1`, … in the environment |
 
 In Docker the collection lives in `/app/data`, mount a volume there to keep it when the container is recreated.
@@ -72,6 +73,7 @@ In Swagger UI, use **Authorize** to enter a key; it is kept across page reloads.
 | `GET /notes?query=…`    | Anki search, e.g. `query=deck:Japanese tag:verb`; `deck:*` for all | `200` `[id, …]`       |
 | `GET /notes/{id}`       |                                                                  | `200` `{ "id", "noteTypeId", "fields", "tags" }` |
 | `POST /notes`           | `{ "deckId": 1, "noteTypeId": 1, "fields": ["front", "back"], "tags": ["optional"] }` | `201` `{ "id" }` |
+| `GET /suggestion-modules` |                                                                | `200` `[{ "id", "description", "isDefault", "styles" }]` |
 | `POST /notes/suggestions` | `{ "term", "context", "noteTypeId", … }`, see [Card suggestions](#card-suggestions) | `200` `{ "notes": [{ "fields" }], "existingNoteIds" }` |
 | `PUT /notes/{id}`       | `{ "fields": ["front", "back"], "tags": ["optional"] }`          | `204`                   |
 | `DELETE /notes/{id}`    |                                                                  | `204`                   |
@@ -112,6 +114,7 @@ collection: the client shows the drafts, the user edits or picks them, and adds 
   "noteTypeId": 1700000000000,
   "deckId": 1,
   "count": 2,
+  "module": "language",
   "style": "guided_cloze",
   "instructions": ["add the pronunciation", "no idioms"]
 }
@@ -128,29 +131,43 @@ ids of notes that already contain the term:
 }
 ```
 
-`style` picks how the notes are written. For a cloze note type (`isCloze` in `GET /note-types`):
+### Modules and styles
 
-- `CLOZE` (the default): the term hidden in a sentence, `{{c1::bank}}`, with a hint only when it helps.
-- `GUIDED_CLOZE`: for a high-value word (a verb, adjective or adverb) best learned in its natural context. Every
-  deletion has a hint that identifies the word uniquely, so no close synonym fits it, in `Llm:NativeLanguage` or in
-  simple words of the language being learned: `{{c1::bank::берег реки}}`. The back of the card (`Back Extra`) has
-  the full sentence, the IPA of the word and its common collocation. Drafts with a deletion without a hint are
-  dropped.
-- `AUTO`: the model picks `GUIDED_CLOZE` for a high-value word and `CLOZE` for any other term, note by note. Every
-  draft needs a cloze deletion, hints are up to the model.
+What the notes are about comes from a module, how each one is written from a style. `Llm:Module` picks the module
+used by default, and a request can name another with `module`. `GET /suggestion-modules` lists the modules with their
+styles; names are matched ignoring case and underscores (`guided_cloze`, `GuidedCloze`).
 
-For a note type with a front and a back, such as Basic:
+Every module has the plain styles, used when a request names no `style`:
 
-- Without `style`, a plain card: question on the front, answer on the back.
-- `COLLOCATION_IN_CONTEXT`: teaches which words the term combines with. The front has a natural sentence with a
-  common collocation of the term in bold, `She <b>made a decision</b> quickly.`, the back the collocation, its
-  meaning (in `Llm:NativeLanguage` or in simple words) and one more example sentence. Drafts without both a front
-  and a back are dropped.
-- `AUTO`: the model picks `COLLOCATION_IN_CONTEXT` when what's worth learning about the term is the words it
-  combines with, and a plain card otherwise.
+- `CLOZE`, for a cloze note type (`isCloze` in `GET /note-types`): the term hidden in a sentence, `{{c1::bank}}`, with
+  a hint only when it helps.
+- `CARD`, for a note type with a front and a back, such as Basic: a question on the front, the answer on the back.
 
-A style for the other kind of note type is rejected with `422`, and drafts for a note type without cloze that
-contain cloze deletions are dropped, Anki would show them as they are.
+`AUTO` lets the model pick, note by note, one of the module's styles that fits the note type, or the plain one for any
+other term. A style that doesn't fit the note type, or that the module doesn't have, is rejected with `422`. Drafts
+that don't follow the style are dropped, and so are drafts with cloze deletions for a note type without cloze, Anki
+would show them as they are.
+
+| Module     | Styles                                       |
+|------------|----------------------------------------------|
+| `LANGUAGE` | `GUIDED_CLOZE`, `COLLOCATION_IN_CONTEXT` (the default module) |
+| `GENERAL`  | only the plain ones, for any subject         |
+
+`LANGUAGE`, learning a foreign language: the model is told the term is a word or phrase of the language being learned,
+and the learner's native language from `Llm:Modules:Language:NativeLanguage`.
+
+- `GUIDED_CLOZE`, for a cloze note type: for a high-value word (a verb, adjective or adverb) best learned in its
+  natural context. Every deletion has a hint that identifies the word uniquely, so no close synonym fits it, in the
+  native language or in simple words of the language being learned: `{{c1::bank::берег реки}}`. The back of the card
+  (`Back Extra`) has the full sentence, the IPA of the word and its common collocation. Drafts with a deletion
+  without a hint are dropped.
+- `COLLOCATION_IN_CONTEXT`, for a note type with a front and a back: teaches which words the term combines with. The
+  front has a natural sentence with a common collocation of the term in bold, `She <b>made a decision</b> quickly.`,
+  the back the collocation, its meaning (in the native language or in simple words) and one more example sentence.
+  Drafts without both a front and a back are dropped.
+
+A new module is a `SuggestionModule` value (an id, a description, lines about the subject for the prompt, and its
+styles) in `src/Ankit.Server/Modules/`, added to the list in `Program.fs`.
 
 The prompt includes the notes that contain the term, so the model doesn't repeat them, and the three most recent
 notes of the note type (in `deckId`, when given) as examples of your style. The context is treated as untrusted:

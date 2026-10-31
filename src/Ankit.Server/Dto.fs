@@ -73,17 +73,6 @@ type NoteTypeDto = {
     IsCloze: bool
 }
 
-type CardStyle =
-    /// The term hidden in a sentence, a hint only when it helps
-    | Cloze
-    /// For a high-value word (verb, adjective, adverb): a hint that identifies it uniquely, and the full sentence,
-    /// IPA and common collocation on the back
-    | GuidedCloze
-    /// Not a cloze: a sentence with a common collocation of the term in bold on the front, the collocation, its
-    /// meaning and another example on the back
-    | CollocationInContext
-    | Auto
-
 [<CLIMutable>]
 type SuggestNotesDto = {
     /// The word or phrase to learn
@@ -106,7 +95,12 @@ type SuggestNotesDto = {
     [<CountRange(1, 5)>]
     Count: int option
 
-    Style: CardStyle option
+    /// A module from GET /suggestion-modules, Llm:Module when left out
+    Module: string option
+
+    /// A style of the module that fits the note type, or AUTO to let the model pick one for each note; the plain style
+    /// of the note type, CLOZE or CARD, when left out
+    Style: string option
 
     /// Extra instructions for this request, e.g. "add the reading in hiragana"
     Instructions: string array option
@@ -122,6 +116,25 @@ type SuggestionsDto = {
     Notes: SuggestedNoteDto array
     /// Notes that already contain the term, in any note type
     ExistingNoteIds: int64 array
+}
+
+type NoteKindDto =
+    | Cloze
+    | FrontBack
+
+type SuggestionStyleDto = {
+    Id: string
+    Name: string
+    Kind: NoteKindDto
+    Description: string
+}
+
+type SuggestionModuleDto = {
+    Id: string
+    Description: string
+    /// Used when a request names no module
+    IsDefault: bool
+    Styles: SuggestionStyleDto array
 }
 
 type SyncDirection =

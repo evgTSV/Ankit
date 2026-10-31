@@ -142,7 +142,7 @@ Fine for quick iteration once `Prepare` has run:
 
 ### Ankit.Server (F#)
 
-Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services` → `Llm` → `AnkiSyncWorker` → `ErrorHandler` →
+Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services` → `Llm` → `Modules/Language` → `AnkiSyncWorker` → `ErrorHandler` →
 `Handlers` → `Auth` → `ApiDocs` → `Program`. A new file must be added to the `.fsproj` in the right position.
 
 - **Services** (`Services.fs`): interface + `Anki*` implementation taking `RslibBackend` (and others) by constructor,
@@ -168,11 +168,18 @@ Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services
   (Microsoft.Extensions.AI) over the OpenAI SDK, so any OpenAI-compatible endpoint works (`Llm` section). It reads
   the collection directly and never goes through the worker: an LLM call takes seconds and the worker runs jobs one
   at a time. The JSON schema is built per note type from its field names; answers are parsed leniently (outermost
-  `{...}`), sanitized (`CardHtml.sanitize`, the context is untrusted web text) and filtered (cloze note types need a
-  deletion, `GUIDED_CLOZE` a hint in every deletion, `AUTO` only a deletion; note types without cloze reject
-  deletions, and `COLLOCATION_IN_CONTEXT`, their style, needs a front and a back; `CardStyle` is in `Dto.fs`, which
-  `Llm.fs` uses directly like `SyncDirection`). `LlmClient.create` validates the settings at startup; without
-  `Llm:Model` the route answers 503.
+  `{...}`), sanitized (`CardHtml.sanitize`, the context is untrusted web text) and filtered by the style.
+  `LlmClient.create` validates the settings at startup; without `Llm:Model` the route answers 503.
+- **Suggestion modules** (`Llm.fs` core, `Modules/*.fs`): what notes are about is a `SuggestionModule` value: id,
+  prompt lines about the subject (`Context`) and its `SuggestionStyle`s (id, kind `Cloze`/`FrontBack`, description,
+  prompt rules, `Accepts` check on the sanitized fields). The core owns everything shared: the prompt skeleton, the
+  plain styles `CLOZE`/`CARD` (`Styles`), `AUTO` (`ChosenStyle`: the model picks among the module's styles of the
+  note type's kind), and rejecting cloze markup on front/back note types. Modules know nothing about the LLM client
+  or the collection. `Modules/Language.fs` (`LANGUAGE`, the default, `GUIDED_CLOZE`, `COLLOCATION_IN_CONTEXT`,
+  settings in `Llm:Modules:Language`) and `SuggestionModule.general` (`GENERAL`, plain styles only); `Program.fs`
+  builds `SuggestionModules` from the list and `Llm:Module`. Style and module ids are strings matched with
+  `Styles.same` (case and underscores ignored). A new module: a file in `Modules/`, added to the `.fsproj` after
+  `Llm.fs` and to the list in `Program.fs`.
   The OpenAI client throws an `AggregateException` of its attempts after retries, `(|LlmError|_|)` unwraps it.
   Service tests use a fake `IChatClient` (`CardSuggestionServiceTests`).
 - **Auth** (`Auth.fs`): API keys from `Ankit:ApiKeys` (name + `sha256:` hash, created with `./build

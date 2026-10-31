@@ -61,8 +61,8 @@ type LlmSettings = {
     Model: string
     ResponseFormat: LlmResponseFormat
     TimeoutSeconds: int
-    /// The learner's native language, for hints and explanations
-    NativeLanguage: string
+    /// The suggestion module used when a request names none
+    Module: string
     /// Added to every prompt, e.g. the learner's native language or the style of the cards
     Instructions: string[]
 }

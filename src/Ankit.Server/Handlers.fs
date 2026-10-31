@@ -178,6 +178,7 @@ let suggestNotes (dto: SuggestNotesDto) : EndpointHandler =
                 NotetypeId = dto.NoteTypeId
                 DeckId = dto.DeckId
                 Count = dto.Count |> Option.defaultValue 1
+                Module = dto.Module
                 Style = dto.Style
                 Instructions = dto.Instructions |> Option.map List.ofArray |> Option.defaultValue []
             }
@@ -207,6 +208,29 @@ let suggestNotes (dto: SuggestNotesDto) : EndpointHandler =
                 return! writeError ctx Status502BadGateway $"The model's answer can't be used: %s{message}" None
         }
         :> Task
+
+let listSuggestionModules: EndpointHandler =
+    fun ctx ->
+        let modules = ctx.GetService<SuggestionModules>()
+
+        let toStyle (style: SuggestionStyle) : SuggestionStyleDto = {
+            Id = style.Id
+            Name = style.Name
+            Kind =
+                match style.Kind with
+                | NoteKind.Cloze -> NoteKindDto.Cloze
+                | NoteKind.FrontBack -> NoteKindDto.FrontBack
+            Description = style.Description
+        }
+
+        let toDto (suggestionModule: SuggestionModule) : SuggestionModuleDto = {
+            Id = suggestionModule.Id
+            Description = suggestionModule.Description
+            IsDefault = suggestionModule.Id = modules.Default.Id
+            Styles = Styles.ofModule suggestionModule |> List.map toStyle |> Array.ofList
+        }
+
+        writeJson Status200OK (modules.All |> List.map toDto) ctx
 
 // --- Note types ---
 

@@ -41,6 +41,9 @@ let endpoints = [
 
         route "/note-types" Handlers.listNoteTypes
         |> describe "ListNoteTypes" "List note types with their fields in order" None [ ok<NoteTypeDto[]> ]
+
+        route "/suggestion-modules" Handlers.listSuggestionModules
+        |> describe "ListSuggestionModules" "List the modules for note suggestions with their styles" None [ ok<SuggestionModuleDto[]> ]
     ]
     |> requireApiKey
     POST [
@@ -101,7 +104,7 @@ let openBackend (sp: IServiceProvider) : RslibBackend =
 
     backend
 
-let configureServices (configuration: IConfiguration) (apiKeys: ApiKeyStore) (llm: LlmClient) (services: IServiceCollection) =
+let configureServices (configuration: IConfiguration) (apiKeys: ApiKeyStore) (llm: LlmClient) (suggestionModules: SuggestionModules) (services: IServiceCollection) =
     services
         .Configure<AnkitServerSettings>(configuration.GetSection AnkitServerSettingsSection)
         .Configure<SyncServerSettings>(configuration.GetSection SyncServerSettingsSection)
@@ -128,6 +131,7 @@ let configureServices (configuration: IConfiguration) (apiKeys: ApiKeyStore) (ll
         .AddSingleton<INoteService, AnkiNoteService>()
         .AddSingleton<INotetypeService, AnkiNotetypeService>()
         .AddSingleton<LlmClient>(llm)
+        .AddSingleton<SuggestionModules>(suggestionModules)
         .AddSingleton<ICardSuggestionService, AnkiCardSuggestionService>()
         .AddHostedService<AnkiSyncWorker>()
     |> addApiKeyAuth apiKeys
@@ -155,21 +159,37 @@ let apiKeys =
         eprintfn $"%s{message}"
         exit 1
 
-let llm =
-    match LlmClient.create (builder.Configuration.GetSection(LlmSettingsSection).Get<LlmSettings>()) with
-    | Ok llm -> llm
+let llmSettings = builder.Configuration.GetSection(LlmSettingsSection).Get<LlmSettings>()
+
+let startupValue (result: Result<'a, string>) =
+    match result with
+    | Ok value -> value
     | Error message ->
         eprintfn $"%s{message}"
         exit 1
 
-configureServices builder.Configuration apiKeys llm builder.Services
+let llm = startupValue (LlmClient.create llmSettings)
+
+let suggestionModules =
+    let language =
+        Modules.Language.create (builder.Configuration.GetSection(Modules.Language.SettingsSection).Get<Modules.Language.LanguageSettings>())
+
+    let defaultModule =
+        if isNull (box llmSettings) || String.IsNullOrWhiteSpace llmSettings.Module then
+            language.Id
+        else
+            llmSettings.Module
+
+    startupValue (SuggestionModules.create [ language; SuggestionModule.general ] defaultModule)
+
+configureServices builder.Configuration apiKeys llm suggestionModules builder.Services
 
 let app = builder.Build()
 configureApp app
 app.MapOpenApi() |> ignore
 
 match llm.Chat with
-| Some _ -> app.Logger.LogInformation("Card suggestions use {Model} at {Provider}", llm.Settings.Model, llm.Settings.Provider)
+| Some _ -> app.Logger.LogInformation("Card suggestions use {Model} at {Provider}, module {Module} by default", llm.Settings.Model, llm.Settings.Provider, suggestionModules.Default.Id)
 | None -> app.Logger.LogInformation("Card suggestions are off, Llm:Model is empty")
 
 if apiKeys.IsDisabled then
