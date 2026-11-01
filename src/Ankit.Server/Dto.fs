@@ -139,6 +139,25 @@ type SuggestionModuleDto = {
     Styles: SuggestionStyleDto array
 }
 
+[<RequireQualifiedAccess>]
+type HealthStatusDto =
+    | Healthy
+    | Degraded
+    | Unhealthy
+
+type HealthCheckDto = {
+    /// What is checked, e.g. llm
+    Name: string
+    Status: HealthStatusDto
+    Description: string option
+}
+
+type HealthDto = {
+    /// The worst status of the checks
+    Status: HealthStatusDto
+    Checks: HealthCheckDto array
+}
+
 type SyncDirection =
     | Upload
     | Download

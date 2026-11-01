@@ -20,6 +20,8 @@ open Oxpecker.OpenApi
 open Microsoft.AspNetCore.Builder
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Diagnostics.HealthChecks
+open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open Microsoft.Extensions.Options
 
@@ -44,6 +46,9 @@ let endpoints = [
 
         route "/suggestion-modules" Handlers.listSuggestionModules
         |> describe "ListSuggestionModules" "List the modules for note suggestions with their styles" None [ ok<SuggestionModuleDto[]> ]
+
+        route "/health" Handlers.health
+        |> describe "Health" "Check that the services the server depends on, such as the LLM server, answer" None [ ok<HealthDto>; unhealthy ]
     ]
     |> requireApiKey
     POST [
@@ -105,6 +110,8 @@ let openBackend (sp: IServiceProvider) : RslibBackend =
     backend
 
 let configureServices (configuration: IConfiguration) (apiKeys: ApiKeyStore) (llm: LlmClient) (suggestionModules: SuggestionModules) (services: IServiceCollection) =
+    services.AddHealthChecks().AddCheck<LlmHealthCheck>("llm") |> ignore
+
     services
         .Configure<AnkitServerSettings>(configuration.GetSection AnkitServerSettingsSection)
         .Configure<SyncServerSettings>(configuration.GetSection SyncServerSettingsSection)
@@ -191,6 +198,17 @@ app.MapOpenApi() |> ignore
 match llm.Chat with
 | Some _ -> app.Logger.LogInformation("Card suggestions use {Model} at {Provider}, module {Module} by default", llm.Settings.Model, llm.Settings.Provider, suggestionModules.Default.Id)
 | None -> app.Logger.LogInformation("Card suggestions are off, Llm:Model is empty")
+
+if llm.Models.IsSome then
+    app.Lifetime.ApplicationStarted.Register(fun () ->
+        task {
+            let! result = (LlmHealthCheck llm :> IHealthCheck).CheckHealthAsync(HealthCheckContext(), app.Lifetime.ApplicationStopping)
+
+            if result.Status <> HealthStatus.Healthy then
+                app.Logger.LogWarning("Card suggestions will fail until the LLM server answers: {Reason}", result.Description)
+        }
+        |> ignore)
+    |> ignore
 
 if apiKeys.IsDisabled then
     app.Logger.LogWarning("Ankit:DisableAuth is set, the API is open to anyone who can reach it")

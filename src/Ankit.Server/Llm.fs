@@ -19,8 +19,10 @@ open Ankit.Server.Services
 open Ankit.Server.Services.ServiceUtils
 open FsToolkit.ErrorHandling
 open Microsoft.Extensions.AI
+open Microsoft.Extensions.Diagnostics.HealthChecks
 open Microsoft.Extensions.Logging
 open OpenAI
+open OpenAI.Models
 
 [<RequireQualifiedAccess>]
 type SuggestFailed =
@@ -57,6 +59,8 @@ type Suggestions = {
 
 type LlmClient = {
     Chat: IChatClient option
+    /// Only for the health check
+    Models: OpenAIModelClient option
     Settings: LlmSettings
 }
 
@@ -72,6 +76,7 @@ module LlmClient =
         if isNull (box settings) || String.IsNullOrWhiteSpace settings.Model then
             Ok {
                 Chat = None
+                Models = None
                 Settings = settings
             }
         else
@@ -105,6 +110,7 @@ module LlmClient =
 
                 Ok {
                     Chat = Some(client.GetChatClient(settings.Model).AsIChatClient())
+                    Models = Some(client.GetOpenAIModelClient())
                     Settings = settings
                 }
 
@@ -583,6 +589,28 @@ let rec private (|LlmError|_|) (e: exn) : string option =
     | :? ClientResultException as e -> Some $"The LLM server answered %d{e.Status}: %s{e.Message}"
     | :? HttpRequestException as e -> Some $"The LLM server is unreachable: %s{e.Message}"
     | _ -> None
+
+/// Whether the LLM server answers, asked for its models: every OpenAI-compatible server has GET /models
+type LlmHealthCheck(llm: LlmClient) =
+    static let timeout = TimeSpan.FromSeconds 10.0
+
+    interface IHealthCheck with
+        member _.CheckHealthAsync(_, ct) =
+            task {
+                match llm.Models with
+                | None -> return HealthCheckResult.Healthy "Card suggestions are off"
+                | Some models ->
+                    use cts = CancellationTokenSource.CreateLinkedTokenSource ct
+                    cts.CancelAfter timeout
+
+                    try
+                        let! _ = models.GetModelsAsync cts.Token
+                        return HealthCheckResult.Healthy "The LLM server answers"
+                    with
+                    | LlmError message -> return HealthCheckResult.Unhealthy message
+                    | :? OperationCanceledException when not ct.IsCancellationRequested ->
+                        return HealthCheckResult.Unhealthy "The LLM server didn't answer in time"
+            }
 
 [<Interface>]
 type ICardSuggestionService =

@@ -77,6 +77,10 @@ let llmFailed = ResponseBody(typeof<ApiError>, statusCode = Status502BadGateway)
 let llmOff =
     ResponseBody(typeof<ApiError>, statusCode = Status503ServiceUnavailable)
 
+/// A health check failed
+let unhealthy =
+    ResponseBody(typeof<HealthDto>, statusCode = Status503ServiceUnavailable)
+
 let shuttingDown =
     ResponseBody(typeof<ApiError>, statusCode = Status503ServiceUnavailable)
 

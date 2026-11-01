@@ -8,6 +8,7 @@ open Ankit.Server.Dto
 open Ankit.Server.Llm
 open Ankit.Server.Services
 open Microsoft.AspNetCore.Http
+open Microsoft.Extensions.Diagnostics.HealthChecks
 open Microsoft.Extensions.Logging
 open Oxpecker
 open type Microsoft.AspNetCore.Http.StatusCodes
@@ -248,6 +249,42 @@ let listNoteTypes: EndpointHandler =
         }
 
         query notetypes.List (fun list -> writeJson Status200OK (list |> List.map toDto)) ctx
+
+// --- Health ---
+
+let health: EndpointHandler =
+    fun ctx ->
+        task {
+            let! report =
+                ctx.GetService<HealthCheckService>().CheckHealthAsync(ctx.RequestAborted)
+
+            let status (status: HealthStatus) =
+                match status with
+                | HealthStatus.Healthy -> HealthStatusDto.Healthy
+                | HealthStatus.Degraded -> HealthStatusDto.Degraded
+                | _ -> HealthStatusDto.Unhealthy
+
+            let dto = {
+                Status = status report.Status
+                Checks =
+                    report.Entries
+                    |> Seq.map (fun (KeyValue(name, entry)) -> {
+                        Name = name
+                        Status = status entry.Status
+                        Description = Option.ofObj entry.Description
+                    })
+                    |> Array.ofSeq
+            }
+
+            let code =
+                if report.Status = HealthStatus.Unhealthy then
+                    Status503ServiceUnavailable
+                else
+                    Status200OK
+
+            return! writeJson code dto ctx
+        }
+        :> Task
 
 // --- Sync ---
 

@@ -65,6 +65,7 @@ In Swagger UI, use **Authorize** to enter a key; it is kept across page reloads.
 | Endpoint                | Body or query                                                    | Success                 |
 |-------------------------|------------------------------------------------------------------|-------------------------|
 | `GET /ping`             |                                                                  | `200`                   |
+| `GET /health`           |                                                                  | `200` `{ "status", "checks": [{ "name", "status", "description" }] }` |
 | `GET /decks`            |                                                                  | `200` `[{ "id", "name" }]` |
 | `POST /decks`           | `{ "name": "Parent::Child" }`                                    | `201` `{ "id" }`        |
 | `PUT /decks/{id}`       | `{ "name": "New::Name" }`                                        | `204`                   |
@@ -85,6 +86,11 @@ try the endpoints. Union values such as `direction` are case-insensitive (`uploa
 `fields` holds one value per field of the note type, in its order; `GET /note-types` lists them. `PUT /notes/{id}`
 keeps the tags when `tags` is left out. Deleting a deck deletes its child decks and all of their cards; the default
 deck stays: its cards are deleted and its name is reset. Deleting a note deletes its cards.
+
+`GET /health` checks the services the server depends on: `llm` asks the LLM server for its models (`GET /models`,
+which every OpenAI-compatible server has) and is `HEALTHY` while card suggestions are off. It answers `503` when a
+check is `UNHEALTHY`, and its `description` says why, e.g. the server is unreachable or refuses the key. Unlike
+`/ping` it needs an API key. The server runs the same check once at startup and logs a warning when it fails.
 
 Changes answer once they are applied to the local collection, without waiting for the sync; `/sync/full` answers when
 the full sync is done. Reads don't trigger a sync.

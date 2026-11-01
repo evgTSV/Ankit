@@ -173,6 +173,7 @@ Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services
   The JSON schema is built from the field names; answers are parsed leniently (outermost `{...}`), sanitized
   (`CardHtml.sanitize`, the context is untrusted web text) and filtered by the style of their note type.
   `LlmClient.create` validates the settings at startup; without `Llm:Model` the route answers 503.
+  `LlmHealthCheck` (an ASP.NET `IHealthCheck`, served by `GET /health` and run once at startup) lists the models.
 - **Suggestion modules** (`Llm.fs` core, `Modules/*.fs`): what notes are about is a `SuggestionModule` value: id,
   prompt lines about the subject (`Context`) and its `SuggestionStyle`s (id, kind `Cloze`/`FrontBack`, description,
   prompt rules, `Accepts` check on the sanitized fields). The core owns everything shared: the prompt skeleton, the

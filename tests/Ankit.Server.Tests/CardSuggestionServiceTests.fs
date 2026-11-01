@@ -66,6 +66,7 @@ type CardSuggestionServiceTests() =
     let service (chat: IChatClient) format : ICardSuggestionService =
         let llm = {
             Chat = Some chat
+            Models = None
             Settings = settings format
         }
 
@@ -395,6 +396,7 @@ type CardSuggestionServiceTests() =
 
         let llm = {
             Chat = Some(chat :> IChatClient)
+            Models = None
             Settings = settings LlmResponseFormat.JsonSchema
         }
 
