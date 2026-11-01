@@ -33,7 +33,8 @@ type SuggestRequest = {
     Term: string
     Context: string option
     Source: string option
-    NotetypeId: int64
+    /// When None the model picks one for each note among the note types that fit the style
+    NotetypeId: int64 option
     DeckId: int64 option
     Count: int
     /// The default module when None
@@ -43,8 +44,14 @@ type SuggestRequest = {
     Instructions: string list
 }
 
+type SuggestedNote = {
+    NotetypeId: int64
+    /// In the order of the note type's fields
+    Fields: string list
+}
+
 type Suggestions = {
-    Notes: string list list
+    Notes: SuggestedNote list
     ExistingNoteIds: int64 list
 }
 
@@ -94,11 +101,10 @@ module LlmClient =
                     |> Option.filter (String.IsNullOrWhiteSpace >> not)
                     |> Option.defaultValue "none"
 
-                let chat =
-                    OpenAIClient(ApiKeyCredential key, options).GetChatClient(settings.Model).AsIChatClient()
+                let client = OpenAIClient(ApiKeyCredential key, options)
 
                 Ok {
-                    Chat = Some chat
+                    Chat = Some(client.GetChatClient(settings.Model).AsIChatClient())
                     Settings = settings
                 }
 
@@ -256,32 +262,75 @@ type ChosenStyle =
     | Single of SuggestionStyle
     | Auto of plain: SuggestionStyle * choices: SuggestionStyle list
 
+/// A note type the notes may be written for, with the style for it
+type SuggestionTarget = {
+    Notetype: NotetypeInfo
+    Style: ChosenStyle
+}
+
 module ChosenStyle =
     let private kindName (kind: NoteKind) =
         match kind with
         | NoteKind.Cloze -> "a cloze note type"
         | NoteKind.FrontBack -> "a note type with a front and a back, such as Basic"
 
-    /// A style must fit the note type, AUTO picks among the styles of the module that do
-    let choose (suggestionModule: SuggestionModule) (notetype: NotetypeInfo) (style: string option) =
-        let kind = NoteKind.ofNotetype notetype
+    let private isAuto (style: string option) =
+        style |> Option.exists (fun id -> Styles.same id Styles.Auto)
+
+    let private find (suggestionModule: SuggestionModule) (id: string) =
         let styles = Styles.ofModule suggestionModule
 
+        match styles |> List.tryFind (fun s -> Styles.same s.Id id) with
+        | Some style -> Ok style
+        | None ->
+            let ids = (styles |> List.map _.Id) @ [ Styles.Auto ] |> String.concat ", "
+            Error $"Style \"%s{id}\" doesn't exist in module %s{suggestionModule.Id}, its styles are %s{ids}"
+
+    /// The plain style when no style is named, AUTO picks among the styles of the module of that kind
+    let private ofKind (suggestionModule: SuggestionModule) (auto: bool) (kind: NoteKind) =
+        match suggestionModule.Styles |> List.filter (fun s -> s.Kind = kind) with
+        | choices when auto && not choices.IsEmpty -> Auto(Styles.plain kind, choices)
+        | _ -> Single(Styles.plain kind)
+
+    /// A style must fit the note type
+    let choose (suggestionModule: SuggestionModule) (notetype: NotetypeInfo) (style: string option) =
+        let kind = NoteKind.ofNotetype notetype
+
         match style with
-        | None -> Ok(Single(Styles.plain kind))
-        | Some id when Styles.same id Styles.Auto ->
-            match suggestionModule.Styles |> List.filter (fun s -> s.Kind = kind) with
-            | [] -> Ok(Single(Styles.plain kind))
-            | choices -> Ok(Auto(Styles.plain kind, choices))
+        | None -> Ok(ofKind suggestionModule false kind)
+        | Some _ when isAuto style -> Ok(ofKind suggestionModule true kind)
         | Some id ->
-            match styles |> List.tryFind (fun s -> Styles.same s.Id id) with
-            | None ->
-                let ids = (styles |> List.map _.Id) @ [ Styles.Auto ] |> String.concat ", "
-                Error $"Style \"%s{id}\" doesn't exist in module %s{suggestionModule.Id}, its styles are %s{ids}"
-            | Some style when style.Kind <> kind ->
-                Error
-                    $"Note type \"%s{notetype.Name}\" doesn't fit style %s{style.Id}, which needs %s{kindName style.Kind}"
-            | Some style -> Ok(Single style)
+            find suggestionModule id
+            |> Result.bind (fun style ->
+                if style.Kind <> kind then
+                    Error
+                        $"Note type \"%s{notetype.Name}\" doesn't fit style %s{style.Id}, which needs %s{kindName style.Kind}"
+                else
+                    Ok(Single style))
+
+    /// Without a note type in the request: every note type of the collection the style fits, except Image Occlusion
+    let targets (suggestionModule: SuggestionModule) (notetypes: NotetypeInfo list) (style: string option) =
+        let usable = notetypes |> List.filter (fun n -> not n.IsImageOcclusion)
+
+        let target style notetype = {
+            Notetype = notetype
+            Style = style
+        }
+
+        match style with
+        | Some id when not (isAuto style) ->
+            find suggestionModule id
+            |> Result.bind (fun style ->
+                match usable |> List.filter (fun n -> NoteKind.ofNotetype n = style.Kind) with
+                | [] ->
+                    Error
+                        $"No note type in the collection fits style %s{style.Id}, which needs %s{kindName style.Kind}"
+                | fitting -> Ok(fitting |> List.map (target (Single style))))
+        | _ when usable.IsEmpty -> Error "The collection has no note type to write notes for"
+        | _ ->
+            usable
+            |> List.map (fun n -> target (ofKind suggestionModule (isAuto style) (NoteKind.ofNotetype n)) n)
+            |> Ok
 
     let accepts (kind: NoteKind) (chosen: ChosenStyle) (fields: string list) =
         // Without a cloze note type Anki shows {{c1::...}} as it is
@@ -314,10 +363,7 @@ module private Prompt =
 
     let private indented (lines: string list) = lines |> List.map (fun line -> "- " + line)
 
-    let private style (kind: NoteKind) (chosen: ChosenStyle) = [
-        match kind with
-        | NoteKind.Cloze -> "This note type makes cards from cloze deletions."
-        | NoteKind.FrontBack -> "This note type has a front and a back, don't use cloze deletions."
+    let private styleRules (kind: NoteKind) (chosen: ChosenStyle) = [
         match chosen with
         | Single style when style.Id = (Styles.plain kind).Id -> yield! style.Rules
         | Single style ->
@@ -334,10 +380,35 @@ module private Prompt =
             yield! indented plain.Rules
     ]
 
+    let private noteTypes (targets: SuggestionTarget list) = [
+        "Choose the note type of each note from the term and the styles below."
+
+        for kind, group in targets |> List.groupBy (fun t -> NoteKind.ofNotetype t.Notetype) do
+            let names = group |> List.map _.Notetype.Name |> quoted
+
+            match kind with
+            | NoteKind.Cloze -> $"The cloze note types %s{names} make cards from cloze deletions:"
+            | NoteKind.FrontBack ->
+                $"The note types %s{names} have a front and a back, don't use cloze deletions in them:"
+
+            // Every target of a kind has the same style
+            yield! styleRules kind group.Head.Style |> List.map (fun line -> "  " + line)
+    ]
+
+    let private answer (targets: SuggestionTarget list) (count: int) = [
+        match targets with
+        | [ target ] ->
+            $"Answer with JSON only, of the form {{\"notes\": [...]}} with exactly %d{count} note(s). Each note is an object with one string for each of these fields: %s{quoted target.Notetype.Fields}. Leave a field empty when nothing fits it."
+        | _ ->
+            $"Answer with JSON only, of the form {{\"notes\": [...]}} with exactly %d{count} note(s). Each note is an object {{\"noteType\": \"...\", \"fields\": {{...}}}} with the name of its note type and, in fields, one string for each field of that note type. Leave a field empty when nothing fits it. The note types and their fields:"
+
+            for target in targets do
+                $"- \"%s{target.Notetype.Name}\": %s{quoted target.Notetype.Fields}"
+    ]
+
     let system
         (suggestionModule: SuggestionModule)
-        (notetype: NotetypeInfo)
-        (chosen: ChosenStyle)
+        (targets: SuggestionTarget list)
         (count: int)
         (instructions: string list)
         =
@@ -349,8 +420,17 @@ module private Prompt =
             "Don't repeat what the learner's existing notes already cover."
             "Fields hold plain text; <b>, <i> and <br> are the only formatting allowed, no Markdown."
             yield! suggestionModule.Context
-            yield! style (NoteKind.ofNotetype notetype) chosen
-            $"Answer with JSON only, of the form {{\"notes\": [...]}} with exactly %d{count} note(s). Each note is an object with one string for each of these fields: %s{quoted notetype.Fields}. Leave a field empty when nothing fits it."
+            match targets with
+            | [ target ] ->
+                let kind = NoteKind.ofNotetype target.Notetype
+
+                match kind with
+                | NoteKind.Cloze -> "This note type makes cards from cloze deletions."
+                | NoteKind.FrontBack -> "This note type has a front and a back, don't use cloze deletions."
+
+                yield! styleRules kind target.Style
+            | _ -> yield! noteTypes targets
+            yield! answer targets count
             yield! bullets "The learner's instructions:" instructions
         ]
         |> String.concat "\n"
@@ -364,7 +444,12 @@ module private Prompt =
         else
             String.concat " | " fields
 
-    let user (request: SuggestRequest) (notetype: NotetypeInfo) (existing: Note list) (examples: Note list) =
+    let user
+        (request: SuggestRequest)
+        (targets: SuggestionTarget list)
+        (existing: Note list)
+        (examples: (NotetypeInfo * Note) list)
+        =
         [
             $"Term: %s{request.Term}"
             match nonEmpty request.Context with
@@ -373,7 +458,9 @@ module private Prompt =
             match nonEmpty request.Source with
             | Some source -> $"Source: <source>%s{truncate 300 source}</source>"
             | None -> ()
-            $"Note type: \"%s{notetype.Name}\" with the fields %s{quoted notetype.Fields}"
+            match targets with
+            | [ target ] -> $"Note type: \"%s{target.Notetype.Name}\" with the fields %s{quoted target.Notetype.Fields}"
+            | _ -> ()
             yield! bullets "Instructions for this request:" request.Instructions
             if not existing.IsEmpty then
                 "Existing notes that contain the term:"
@@ -381,24 +468,49 @@ module private Prompt =
                 for note in existing do
                     "- " + describe [] note
             if not examples.IsEmpty then
-                "Recent notes of this note type, examples of the learner's style:"
+                match targets with
+                | [ _ ] ->
+                    "Recent notes of this note type, examples of the learner's style:"
 
-                for note in examples do
-                    "- " + describe notetype.Fields note
+                    for notetype, note in examples do
+                        "- " + describe notetype.Fields note
+                | _ ->
+                    "Recent notes of these note types, examples of the learner's style:"
+
+                    for notetype, note in examples do
+                        $"- \"%s{notetype.Name}\": %s{describe notetype.Fields note}"
         ]
         |> String.concat "\n"
 
-    /// Strict schemas need every property required and no others allowed
-    let schema (fields: string list) : JsonElement =
-        let string = dict [ "type", box "string" ]
+    let private strictObject (properties: (string * obj) list) =
+        dict [
+            "type", box "object"
+            "properties", box (dict properties)
+            "required", box (properties |> List.map fst |> Array.ofList)
+            "additionalProperties", box false
+        ]
 
+    let private fieldsObject (fields: string list) =
+        strictObject (fields |> List.map (fun field -> field, box (dict [ "type", box "string" ])))
+
+    /// Strict schemas need every property required and no others allowed
+    let schema (targets: SuggestionTarget list) : JsonElement =
         let note =
-            dict [
-                "type", box "object"
-                "properties", box (fields |> List.map (fun field -> field, box string) |> dict)
-                "required", box (Array.ofList fields)
-                "additionalProperties", box false
-            ]
+            match targets with
+            | [ target ] -> fieldsObject target.Notetype.Fields
+            | _ ->
+                // Each note type gets its own branch, so the fields always belong to the named note type
+                dict [
+                    "anyOf",
+                    targets
+                    |> List.map (fun target ->
+                        strictObject [
+                            "noteType", box (dict [ "type", box "string"; "enum", box [| target.Notetype.Name |] ])
+                            "fields", box (fieldsObject target.Notetype.Fields)
+                        ])
+                    |> Array.ofList
+                    |> box
+                ]
 
         dict [
             "type", box "object"
@@ -408,8 +520,41 @@ module private Prompt =
         ]
         |> JsonSerializer.SerializeToElement
 
+    let private fieldValues (fields: string list) (note: JsonElement) =
+        fields
+        |> List.map (fun field ->
+            match note.TryGetProperty field with
+            | true, value when value.ValueKind = JsonValueKind.String -> value.GetString()
+            | _ -> "")
+
+    /// A note of a note type that wasn't offered is dropped
+    let private draft (targets: SuggestionTarget list) (note: JsonElement) =
+        match targets with
+        | [ target ] -> Some(target, fieldValues target.Notetype.Fields note)
+        | _ ->
+            let name =
+                match note.TryGetProperty "noteType" with
+                | true, value when value.ValueKind = JsonValueKind.String -> value.GetString().Trim()
+                | _ -> ""
+
+            let fields =
+                match note.TryGetProperty "fields" with
+                | true, fields when fields.ValueKind = JsonValueKind.Object -> fields
+                | _ -> note
+
+            targets
+            |> List.tryFind (fun t -> t.Notetype.Name = name)
+            |> Option.orElse (
+                targets
+                |> List.tryFind (fun t -> String.Equals(t.Notetype.Name, name, StringComparison.OrdinalIgnoreCase))
+            )
+            |> Option.map (fun target -> target, fieldValues target.Notetype.Fields fields)
+
     /// Takes the outermost JSON object, models without a JSON mode like to wrap it in Markdown fences
-    let parse (fields: string list) (answer: string) : Result<string list list, string> =
+    let parse
+        (targets: SuggestionTarget list)
+        (answer: string)
+        : Result<(SuggestionTarget * string list) list, string> =
         let start = answer.IndexOf '{'
         let stop = answer.LastIndexOf '}'
 
@@ -423,12 +568,7 @@ module private Prompt =
                 | true, notes when notes.ValueKind = JsonValueKind.Array ->
                     notes.EnumerateArray()
                     |> Seq.filter (fun note -> note.ValueKind = JsonValueKind.Object)
-                    |> Seq.map (fun note ->
-                        fields
-                        |> List.map (fun field ->
-                            match note.TryGetProperty field with
-                            | true, value when value.ValueKind = JsonValueKind.String -> value.GetString()
-                            | _ -> ""))
+                    |> Seq.choose (draft targets)
                     |> List.ofSeq
                     |> Ok
                 | _ -> Error "the answer has no \"notes\" array"
@@ -483,17 +623,57 @@ type AnkiCardSuggestionService
             return List.truncate 20 ids, notes
         }
 
-    let examples (notetypeId: int64) (deckId: int64 option) =
-        let deck = deckId |> Option.map (fun id -> $" did:%d{id}") |> Option.defaultValue ""
+    let examples (targets: SuggestionTarget list) (deckId: int64 option) =
+        let notetypes = targets |> List.map _.Notetype
 
-        latestNotes $"mid:%d{notetypeId}%s{deck}" 3 |> Result.map snd
+        let search =
+            let mids = notetypes |> List.map (fun n -> $"mid:%d{n.Id}") |> String.concat " OR "
+            let deck = deckId |> Option.map (fun id -> $" did:%d{id}") |> Option.defaultValue ""
+            $"(%s{mids})%s{deck}"
 
-    let options (fields: string list) =
+        latestNotes search 3
+        |> Result.map (
+            snd
+            >> List.choose (fun note ->
+                notetypes
+                |> List.tryFind (fun n -> n.Id = note.NotetypeId)
+                |> Option.map (fun n -> n, note))
+        )
+
+    let targets (suggestionModule: SuggestionModule) (request: SuggestRequest) =
+        match request.NotetypeId with
+        | Some notetypeId ->
+            result {
+                let! notetype =
+                    notetypes.Get notetypeId
+                    |> Result.mapError (function
+                        | CommandFailed.NotFound message -> rejected message
+                        | e -> SuggestFailed.Command e)
+
+                let! style =
+                    ChosenStyle.choose suggestionModule notetype request.Style
+                    |> Result.mapError rejected
+
+                return [
+                    {
+                        Notetype = notetype
+                        Style = style
+                    }
+                ]
+            }
+        | None ->
+            notetypes.List()
+            |> Result.mapError SuggestFailed.Command
+            |> Result.bind (fun all ->
+                ChosenStyle.targets suggestionModule all request.Style
+                |> Result.mapError rejected)
+
+    let options (targets: SuggestionTarget list) =
         let options = ChatOptions()
 
         match llm.Settings.ResponseFormat with
         | LlmResponseFormat.JsonSchema ->
-            options.ResponseFormat <- ChatResponseFormat.ForJsonSchema(Prompt.schema fields, "notes", "Anki notes")
+            options.ResponseFormat <- ChatResponseFormat.ForJsonSchema(Prompt.schema targets, "notes", "Anki notes")
             options.AdditionalProperties <- AdditionalPropertiesDictionary()
             options.AdditionalProperties["strict"] <- box true
         | LlmResponseFormat.JsonObject -> options.ResponseFormat <- ChatResponseFormat.Json
@@ -542,22 +722,13 @@ type AnkiCardSuggestionService
             | Some chat ->
                 taskResult {
                     let! suggestionModule = suggestionModule request.Module
-
-                    let! notetype =
-                        notetypes.Get request.NotetypeId
-                        |> Result.mapError (function
-                            | CommandFailed.NotFound message -> rejected message
-                            | e -> SuggestFailed.Command e)
-
-                    let! chosen =
-                        ChosenStyle.choose suggestionModule notetype request.Style
-                        |> Result.mapError rejected
+                    let! targets = targets suggestionModule request
 
                     let! existingIds, existing =
                         existingNotes request.Term |> Result.mapError SuggestFailed.Command
 
                     let! examples =
-                        examples notetype.Id request.DeckId |> Result.mapError SuggestFailed.Command
+                        examples targets request.DeckId |> Result.mapError SuggestFailed.Command
 
                     let instructions =
                         Option.ofObj llm.Settings.Instructions
@@ -565,28 +736,35 @@ type AnkiCardSuggestionService
                         |> List.ofArray
 
                     let messages = [
-                        ChatMessage(
-                            ChatRole.System,
-                            Prompt.system suggestionModule notetype chosen request.Count instructions
-                        )
-                        ChatMessage(ChatRole.User, Prompt.user request notetype existing examples)
+                        ChatMessage(ChatRole.System, Prompt.system suggestionModule targets request.Count instructions)
+                        ChatMessage(ChatRole.User, Prompt.user request targets existing examples)
                     ]
 
-                    let! answer = ask chat messages (options notetype.Fields) ct
+                    let! answer = ask chat messages (options targets) ct
 
                     let! drafts =
-                        Prompt.parse notetype.Fields answer
-                        |> Result.mapError SuggestFailed.InvalidOutput
+                        Prompt.parse targets answer |> Result.mapError SuggestFailed.InvalidOutput
 
                     let notes =
                         drafts
-                        |> List.map (List.map CardHtml.sanitize)
-                        |> List.filter (ChosenStyle.accepts (NoteKind.ofNotetype notetype) chosen)
+                        |> List.map (fun (target, fields) -> target, List.map CardHtml.sanitize fields)
+                        |> List.filter (fun (target, fields) ->
+                            ChosenStyle.accepts (NoteKind.ofNotetype target.Notetype) target.Style fields)
                         |> List.truncate request.Count
+                        |> List.map (fun (target, fields) -> {
+                            NotetypeId = target.Notetype.Id
+                            Fields = fields
+                        })
 
                     if notes.IsEmpty then
                         logger.LogWarning("Model answer has no usable note: {Answer}", answer)
-                        return! Error(SuggestFailed.InvalidOutput(ChosenStyle.rejection chosen))
+
+                        let rejection =
+                            match targets with
+                            | [ target ] -> ChosenStyle.rejection target.Style
+                            | _ -> "no note of one of the note types offered that follows its style"
+
+                        return! Error(SuggestFailed.InvalidOutput rejection)
                     else
                         return {
                             Notes = notes

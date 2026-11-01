@@ -341,6 +341,8 @@ type NotetypeInfo = {
     /// Field names in the order notes list their fields
     Fields: string list
     IsCloze: bool
+    /// Its notes need an image with the occlusions drawn on it
+    IsImageOcclusion: bool
 }
 
 [<Interface>]
@@ -354,6 +356,7 @@ type AnkiNotetypeService(backend: RslibBackend) =
         Name = notetype.Name
         Fields = notetype.Fields |> Seq.map _.Name |> List.ofSeq
         IsCloze = notetype.Config.Kind = Notetype.Types.Config.Types.Kind.Cloze
+        IsImageOcclusion = notetype.Config.OriginalStockKind = StockNotetype.Types.OriginalStockKind.ImageOcclusion
     }
 
     let get (notetypeId: int64) = backend.GetNotetype(NotetypeId(Ntid = notetypeId))

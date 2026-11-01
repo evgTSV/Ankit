@@ -85,8 +85,10 @@ type SuggestNotesDto = {
     /// Title or URL of the page the context comes from
     Source: string option
 
+    /// The note type to write the notes for. When left out the model picks one for each note among the note types
+    /// the style fits, Image Occlusion excepted, and each suggested note names its own
     [<NumericId>]
-    NoteTypeId: int64
+    NoteTypeId: int64 option
 
     [<NumericId>]
     DeckId: int64 option
@@ -107,12 +109,12 @@ type SuggestNotesDto = {
 }
 
 type SuggestedNoteDto = {
+    NoteTypeId: int64
     /// One value per field of the note type, in its order, ready for POST /notes
     Fields: string array
 }
 
 type SuggestionsDto = {
-    NoteTypeId: int64
     Notes: SuggestedNoteDto array
     /// Notes that already contain the term, in any note type
     ExistingNoteIds: int64 array

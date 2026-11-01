@@ -167,8 +167,11 @@ Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services
 - **Card suggestions** (`Llm.fs`): `ICardSuggestionService` drafts notes with an `IChatClient`
   (Microsoft.Extensions.AI) over the OpenAI SDK, so any OpenAI-compatible endpoint works (`Llm` section). It reads
   the collection directly and never goes through the worker: an LLM call takes seconds and the worker runs jobs one
-  at a time. The JSON schema is built per note type from its field names; answers are parsed leniently (outermost
-  `{...}`), sanitized (`CardHtml.sanitize`, the context is untrusted web text) and filtered by the style.
+  at a time. A request names a note type, or the model picks one per note among the `SuggestionTarget`s
+  (`ChosenStyle.targets`: the note types the style fits, never Image Occlusion); a single target keeps the flat
+  `{"notes": [{field: value}]}` shape, several use `{"noteType", "fields"}` with an `anyOf` schema branch per type.
+  The JSON schema is built from the field names; answers are parsed leniently (outermost `{...}`), sanitized
+  (`CardHtml.sanitize`, the context is untrusted web text) and filtered by the style of their note type.
   `LlmClient.create` validates the settings at startup; without `Llm:Model` the route answers 503.
 - **Suggestion modules** (`Llm.fs` core, `Modules/*.fs`): what notes are about is a `SuggestionModule` value: id,
   prompt lines about the subject (`Context`) and its `SuggestionStyle`s (id, kind `Cloze`/`FrontBack`, description,

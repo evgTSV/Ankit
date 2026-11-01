@@ -74,7 +74,7 @@ In Swagger UI, use **Authorize** to enter a key; it is kept across page reloads.
 | `GET /notes/{id}`       |                                                                  | `200` `{ "id", "noteTypeId", "fields", "tags" }` |
 | `POST /notes`           | `{ "deckId": 1, "noteTypeId": 1, "fields": ["front", "back"], "tags": ["optional"] }` | `201` `{ "id" }` |
 | `GET /suggestion-modules` |                                                                | `200` `[{ "id", "description", "isDefault", "styles" }]` |
-| `POST /notes/suggestions` | `{ "term", "context", "noteTypeId", … }`, see [Card suggestions](#card-suggestions) | `200` `{ "notes": [{ "fields" }], "existingNoteIds" }` |
+| `POST /notes/suggestions` | `{ "term", "context", "noteTypeId", … }`, see [Card suggestions](#card-suggestions) | `200` `{ "notes": [{ "noteTypeId", "fields" }], "existingNoteIds" }` |
 | `PUT /notes/{id}`       | `{ "fields": ["front", "back"], "tags": ["optional"] }`          | `204`                   |
 | `DELETE /notes/{id}`    |                                                                  | `204`                   |
 | `POST /sync/full`       | `{ "direction": "upload" }` or `{ "direction": "download" }`     | `204`                   |
@@ -120,16 +120,26 @@ collection: the client shows the drafts, the user edits or picks them, and adds 
 }
 ```
 
-Only `term` and `noteTypeId` are required. The answer has one value per field of the note type in its order, and the
-ids of notes that already contain the term:
+Only `term` is required. Each note in the answer names its note type and has one value per field of it, in its
+order, ready for `POST /notes`; the answer also has the ids of notes that already contain the term:
 
 ```json
 {
-  "noteTypeId": 1700000000000,
-  "notes": [{ "fields": ["A picnic on the {{c1::bank}} of the river", "the land beside a river"] }],
+  "notes": [
+    {
+      "noteTypeId": 1700000000000,
+      "fields": ["A picnic on the {{c1::bank}} of the river", "the land beside a river"]
+    }
+  ],
   "existingNoteIds": [1700000000123]
 }
 ```
+
+Without `noteTypeId` the model picks the note type of each note among those of the collection that fit the
+style: with `style` only the note types of its kind (cloze or front and back), without it or with `AUTO` all of them,
+each with its plain style or the module's styles of its kind. Image Occlusion note types are never offered. With a
+strict schema the model can only name an offered note type; a draft that names another one, or doesn't follow the
+style of the note type it names, is dropped. A style no note type of the collection fits is rejected with `422`.
 
 ### Modules and styles
 
@@ -170,9 +180,9 @@ A new module is a `SuggestionModule` value (an id, a description, lines about th
 styles) in `src/Ankit.Server/Modules/`, added to the list in `Program.fs`.
 
 The prompt includes the notes that contain the term, so the model doesn't repeat them, and the three most recent
-notes of the note type (in `deckId`, when given) as examples of your style. The context is treated as untrusted:
-the model is told not to follow instructions in it, and fields keep only `<b>`, `<i>`, `<u>`, `<br>` and a few
-similar tags without attributes, any other markup is escaped.
+notes of the note type, or of the offered ones (in `deckId`, when given), as examples of your style. The context is
+treated as untrusted: the model is told not to follow instructions in it, and fields keep only `<b>`, `<i>`, `<u>`,
+`<br>` and a few similar tags without attributes, any other markup is escaped.
 
 The server talks to any API that implements OpenAI's chat completions, so the model can come from a hosted provider
 or run locally:
@@ -185,9 +195,9 @@ or run locally:
 | LM Studio           | `http://localhost:1234/v1`      |
 
 `Llm:ResponseFormat` says how the model is held to the shape of the answer. `JsonSchema` (the default) sends a strict
-JSON schema built from the note type's fields, which is the most reliable. For a server that rejects or ignores it,
-use `JsonObject` (JSON mode without a schema) or `Prompt`, which only describes the shape in the prompt and also
-accepts JSON wrapped in Markdown fences.
+JSON schema built from the fields of the note type, or of each offered one, which is the most reliable. For a server
+that rejects or ignores it, use `JsonObject` (JSON mode without a schema) or `Prompt`, which only describes the shape
+in the prompt and also accepts JSON wrapped in Markdown fences.
 
 ## First sync
 

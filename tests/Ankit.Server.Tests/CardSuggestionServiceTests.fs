@@ -81,7 +81,7 @@ type CardSuggestionServiceTests() =
         Term = "bank"
         Context = Some "We had a picnic on the bank of the river."
         Source = Some "A walk in the park"
-        NotetypeId = notetypeId
+        NotetypeId = Some notetypeId
         DeckId = None
         Count = 1
         Module = None
@@ -98,6 +98,8 @@ type CardSuggestionServiceTests() =
         match result with
         | Ok suggestions -> suggestions
         | Error e -> failwith $"Expected suggestions, got %A{e}"
+
+    let fieldsOf (suggestions: Suggestions) = suggestions.Notes |> List.map _.Fields
 
     let invalidOutput result =
         match result with
@@ -146,7 +148,7 @@ type CardSuggestionServiceTests() =
 
         let result = suggested (suggest chat LlmResponseFormat.JsonSchema (request cloze))
 
-        Assert.Equal<string list list>([ [ "A picnic on the {{c1::bank}} of the river"; "берег" ] ], result.Notes)
+        Assert.Equal<string list list>([ [ "A picnic on the {{c1::bank}} of the river"; "берег" ] ], (fieldsOf result))
 
     [<Fact>]
     member _.``Prompt carries the term, its context, the fields and the instructions``() =
@@ -228,7 +230,7 @@ type CardSuggestionServiceTests() =
 
         let result = suggested (suggest chat LlmResponseFormat.JsonSchema (request basic))
 
-        Assert.Equal<string list list>([ [ "bank (of a river)"; "берег" ] ], result.Notes)
+        Assert.Equal<string list list>([ [ "bank (of a river)"; "берег" ] ], (fieldsOf result))
         Assert.Contains("Front: cat | Back: кошка", chat.Prompt)
 
     [<Fact>]
@@ -269,7 +271,7 @@ type CardSuggestionServiceTests() =
                     "&lt;b onclick=\"x\"&gt;b</b>"
                 ]
             ],
-            result.Notes
+            (fieldsOf result)
         )
 
     [<Fact>]
@@ -281,7 +283,7 @@ type CardSuggestionServiceTests() =
         let result =
             suggested (suggest chat LlmResponseFormat.JsonSchema { request cloze with Count = 2 })
 
-        Assert.Equal<string list list>([ [ "On the {{c1::bank}}"; "" ] ], result.Notes)
+        Assert.Equal<string list list>([ [ "On the {{c1::bank}}"; "" ] ], (fieldsOf result))
 
     [<Fact>]
     member _.``Answer without a usable note is rejected``() =
@@ -313,7 +315,7 @@ type CardSuggestionServiceTests() =
         let result =
             suggested (suggest chat LlmResponseFormat.JsonSchema { request basic with Count = 2 })
 
-        Assert.Equal<string list list>([ [ "1"; "1" ]; [ "2"; "2" ] ], result.Notes)
+        Assert.Equal<string list list>([ [ "1"; "1" ]; [ "2"; "2" ] ], (fieldsOf result))
 
     [<Fact>]
     member _.``Unknown note type is rejected without asking the model``() =
@@ -373,7 +375,7 @@ type CardSuggestionServiceTests() =
                     "We sat on the bank of the river<br>/bæŋk/<br>river bank"
                 ]
             ],
-            result.Notes
+            (fieldsOf result)
         )
 
         for expected in
@@ -422,7 +424,10 @@ type CardSuggestionServiceTests() =
         let result =
             suggested (suggest chat LlmResponseFormat.JsonSchema { guided (request cloze) with Count = 3 })
 
-        Assert.Equal<string list list>([ [ "the {{c1::bank::берег}} of the {{c2::river::река}}"; "" ] ], result.Notes)
+        Assert.Equal<string list list>(
+            [ [ "the {{c1::bank::берег}} of the {{c2::river::река}}"; "" ] ],
+            (fieldsOf result)
+        )
 
         invalidOutput (
             suggest
@@ -465,7 +470,7 @@ type CardSuggestionServiceTests() =
                     "make a decision<br>принять решение<br>We need to make a decision today."
                 ]
             ],
-            result.Notes
+            (fieldsOf result)
         )
 
         for expected in
@@ -502,7 +507,7 @@ type CardSuggestionServiceTests() =
         let result =
             suggested (suggest chat LlmResponseFormat.JsonSchema { request basic with Count = 2 })
 
-        Assert.Equal<string list list>([ [ "bank (of a river)"; "берег" ] ], result.Notes)
+        Assert.Equal<string list list>([ [ "bank (of a river)"; "берег" ] ], (fieldsOf result))
 
     [<Fact>]
     member _.``Auto on a cloze note type chooses between guided and plain cloze``() =
@@ -631,6 +636,95 @@ type CardSuggestionServiceTests() =
     member _.``Default module must exist``() =
         Assert.True(Result.isError (SuggestionModules.create [ SuggestionModule.general ] "language"))
         Assert.True(Result.isOk (SuggestionModules.create [ SuggestionModule.general ] "General"))
+
+    [<Fact>]
+    member _.``Without a note type the model picks one for each note``() =
+        let chat =
+            new FakeChat(fun () ->
+                """{"notes": [{"noteType": "Cloze", "fields": {"Text": "A picnic on the {{c1::bank}}", "Back Extra": ""}}, {"noteType": "basic", "fields": {"Front": "bank (of a river)", "Back": "берег"}}]}""")
+
+        let result =
+            suggested (
+                suggest chat LlmResponseFormat.JsonSchema {
+                    request cloze with
+                        NotetypeId = None
+                        Count = 2
+                }
+            )
+
+        Assert.Equal<SuggestedNote list>(
+            [
+                {
+                    NotetypeId = cloze
+                    Fields = [ "A picnic on the {{c1::bank}}"; "" ]
+                }
+                {
+                    NotetypeId = basic
+                    Fields = [ "bank (of a river)"; "берег" ]
+                }
+            ],
+            result.Notes
+        )
+
+        for expected in
+            [
+                "Choose the note type of each note"
+                "\"Basic\": \"Front\", \"Back\""
+                "\"Cloze\": \"Text\", \"Back Extra\""
+            ] do
+            Assert.Contains(expected, chat.Prompt)
+
+        Assert.DoesNotContain("Image Occlusion", chat.Prompt)
+
+        match (chat.Requests |> Seq.last |> snd).ResponseFormat with
+        | :? ChatResponseFormatJson as format when format.Schema.HasValue ->
+            let schema = format.Schema.Value.GetRawText()
+            Assert.Contains("anyOf", schema)
+            Assert.Contains("\"Basic (and reversed card)\"", schema)
+        | other -> Assert.Fail $"Expected a JSON schema, got %A{other}"
+
+    [<Fact>]
+    member _.``Without a note type only those the style fits are offered``() =
+        let chat =
+            new FakeChat(fun () ->
+                """{"notes": [{"noteType": "Cloze", "fields": {"Text": "She {{c1::made}} a decision", "Back Extra": ""}}, {"noteType": "Vocabulary", "fields": {"Word": "decision"}}, {"noteType": "Basic", "fields": {"Front": "She <b>made a decision</b>.", "Back": "make a decision"}}]}""")
+
+        let result =
+            suggested (
+                suggest chat LlmResponseFormat.JsonSchema {
+                    request basic with
+                        NotetypeId = None
+                        Term = "decision"
+                        Style = Some "COLLOCATION_IN_CONTEXT"
+                        Count = 3
+                }
+            )
+
+        Assert.Equal<SuggestedNote list>(
+            [
+                {
+                    NotetypeId = basic
+                    Fields = [ "She <b>made a decision</b>."; "make a decision" ]
+                }
+            ],
+            result.Notes
+        )
+
+        Assert.Contains("\"Basic (type in the answer)\"", chat.Prompt)
+        Assert.DoesNotContain("\"Cloze\"", chat.Prompt)
+
+    [<Fact>]
+    member _.``Without a note type the style fits the request is rejected without asking the model``() =
+        collection.Backend.RemoveNotetype(Anki.Notetypes.NotetypeId(Ntid = cloze))
+        |> ignore
+
+        let chat = new FakeChat(fun () -> clozeAnswer)
+
+        match suggest chat LlmResponseFormat.JsonSchema { guided (request cloze) with NotetypeId = None } with
+        | Error(SuggestFailed.Command(CommandFailed.Rejected message)) -> Assert.Contains("GUIDED_CLOZE", message)
+        | other -> Assert.Fail $"Expected Rejected, got %A{other}"
+
+        Assert.Empty(chat.Requests)
 
     interface IDisposable with
         member _.Dispose() = (collection :> IDisposable).Dispose()

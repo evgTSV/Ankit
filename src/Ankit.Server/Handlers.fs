@@ -185,11 +185,13 @@ let suggestNotes (dto: SuggestNotesDto) : EndpointHandler =
 
             match! suggestions.Suggest(request, ctx.RequestAborted) with
             | Ok suggested ->
-                let dto = {
-                    NoteTypeId = request.NotetypeId
+                let dto: SuggestionsDto = {
                     Notes =
                         suggested.Notes
-                        |> List.map (fun fields -> { Fields = Array.ofList fields })
+                        |> List.map (fun note -> {
+                            SuggestedNoteDto.NoteTypeId = note.NotetypeId
+                            Fields = Array.ofList note.Fields
+                        })
                         |> Array.ofList
                     ExistingNoteIds = Array.ofList suggested.ExistingNoteIds
                 }
