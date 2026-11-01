@@ -27,6 +27,8 @@
       <Link>.dockerignore</Link>
     </Content>
     <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="appsettings.Development.json" Condition="Exists('appsettings.Development.json')"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
     <Content Include="Dockerfile" />
     <Content Include="paket.references" />
   </ItemGroup>
