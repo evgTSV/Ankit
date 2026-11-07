@@ -7,7 +7,9 @@ open System.Runtime.InteropServices
 open System.Text
 open System.Threading
 open Ankit.Client.Core.Context
-open Ankit.Client.Windows.Win32
+open Ankit.Client.Windows.Interop
+open type Ankit.Client.Windows.Interop.User32
+open type Ankit.Client.Windows.Interop.Kernel32
 open Interop.UIAutomationClient
 
 [<RequireQualifiedAccess>]
@@ -38,14 +40,14 @@ let source (url: string option) =
 
     let name =
         try
-            use p = Process.GetProcessById(windowProcessId hwnd)
+            use p = Process.GetProcessById(WindowProcessId hwnd)
             p.ProcessName
         with _ ->
             ""
 
     {
         Process = name
-        WindowTitle = windowTitle hwnd
+        WindowTitle = WindowTitle hwnd
         Url = url
     }
 
@@ -302,7 +304,7 @@ module Clipboard =
         let modifiers = [ VK_CONTROL; VK_MENU; VK_SHIFT; VK_LWIN; VK_RWIN ]
         let deadline = DateTime.UtcNow.AddSeconds 1.0
 
-        while DateTime.UtcNow < deadline && List.exists isKeyDown modifiers do
+        while DateTime.UtcNow < deadline && List.exists IsKeyDown modifiers do
             Thread.Sleep 10
 
     let private key (vk: int) (up: bool) =

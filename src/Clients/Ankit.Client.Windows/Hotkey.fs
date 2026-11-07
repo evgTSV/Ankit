@@ -4,7 +4,9 @@ open System
 open System.Runtime.InteropServices
 open System.Threading
 open System.Threading.Tasks
-open Ankit.Client.Windows.Win32
+open Ankit.Client.Windows.Interop
+open type Ankit.Client.Windows.Interop.User32
+open type Ankit.Client.Windows.Interop.Kernel32
 
 [<Flags>]
 type Modifiers =
@@ -13,9 +15,6 @@ type Modifiers =
     | Control = 0x0002u
     | Shift = 0x0004u
     | Win = 0x0008u
-
-[<Literal>]
-let private WM_QUIT = 0x0012u
 
 /// Registers a global hotkey on its own thread, which needs a message loop for WM_HOTKEY; onPressed runs on the thread
 /// pool. Disposing unregisters it. Fails when another app holds the same hotkey
