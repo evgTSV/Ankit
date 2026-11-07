@@ -21,12 +21,14 @@ Ankit.Server (F#, Oxpecker)      HTTP API, services, background sync worker
 | `src/rslib-bindings/`             | Rust crate `ankit-rslib` (cdylib) + `csharp-gen` and `header-gen` generators  |
 | `src/Ankit.Native/`               | C# wrapper: `RslibBackend`, `RslibException`/`BackendException`, `Interop/`   |
 | `src/Ankit.Server/`               | F# server: `Dto`, `Services`, `AnkiSyncWorker`, `Handlers`, `Auth`, `ErrorHandler`, `Program` |
+| `src/Clients/`                    | Client core (F#, Fable-compatible), Windows capture and its probe, see `docs/clients.md` |
 | `tests/Ankit.Native.Tests/`       | xunit (C#) tests of the wrapper against a temp collection                     |
 | `tests/Ankit.Server.Tests/`       | xunit (F#) tests of services, worker, and sync against a Dockerized sync server |
+| `tests/Ankit.Client.Core.Tests/`  | xunit (F#) tests of the client core (context extraction)                      |
 | `src/rslib-bindings/tests/ffi.rs` | Rust tests of the C ABI                                                       |
 | `Scripts/build.fsx`               | FAKE build script, the single entry point for everything                      |
 | `Scripts/gen-workflow.fsx`        | Generates `.github/workflows/main.yml` (Generaptor)                          |
-| `docs/`                           | `building.md`, `server.md` (config + HTTP API), `testing.md`                  |
+| `docs/`                           | `building.md`, `server.md` (config + HTTP API), `testing.md`, `clients.md`    |
 
 ## Building
 
@@ -109,7 +111,7 @@ Fine for quick iteration once `Prepare` has run:
 ## Dependencies
 
 - **NuGet via Paket only.** Never `dotnet add package` or `<PackageReference>`. Add the package to the right group in
-  `paket.dependencies` (`WebServer`, `Native`, `Test`), list it in the project's `paket.references`, and run
+  `paket.dependencies` (`WebServer`, `Native`, `Test`, `Windows`), list it in the project's `paket.references`, and run
   `dotnet paket install` (updates `paket.lock`). Commit all three.
 - **Anki version**: `group Anki` → `github ankitects/anki:<tag>` in `paket.dependencies`. After a bump: restore, keep
   `rust-toolchain.toml` equal to Anki's, `./build Prepare`, rebuild, run all tests. The sync server test image is
@@ -210,6 +212,17 @@ Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services
   (`code`, `message`, `traceId`, `timestamp`, `path`). Keep `docs/server.md` in sync when the API changes.
 - Configuration: `Env.fs` (`AnkitServerSettings` section `Ankit`, `SyncServerSettings` section `SyncServer`),
   `appsettings.json`, overridable with env vars like `SyncServer__Password`. Never commit credentials.
+
+### Clients (`src/Clients/`, design in `docs/clients.md`)
+
+- `Ankit.Client.Core` is shared with the planned browser extension through Fable: keep it free of .NET-only APIs
+  (no `Task`, System.Text.Json, reflection or P/Invoke) and of package dependencies Fable can't compile. Its API
+  models are its own records, not the server's DTOs. `Context.extract` turns a platform's `Capture` (text, selection
+  start and length) into the term and its sentence.
+- `Ankit.Client.Windows` targets `net10.0-windows` with `EnableWindowsTargeting`, so it builds on Linux and macOS CI.
+  UI Automation calls run on their own MTA thread (`onMtaThread`), never on a UI thread. The clipboard fallback sends
+  Ctrl+C and restores the previous content; it can't keep the copy out of the clipboard history.
+- `Ankit.Client.Windows.Probe` is a console app for trying the capture in real apps (Ctrl+Alt+A); it has no tests.
 
 ## Code style
 

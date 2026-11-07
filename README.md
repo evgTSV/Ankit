@@ -24,6 +24,7 @@ On a fresh account, call `POST /sync/full` once to start syncing, see [First syn
 
 - [Building](docs/building.md): prerequisites, build options, pipeline and targets
 - [Server](docs/server.md): configuration, HTTP API, errors and the first sync
+- [Clients](docs/clients.md): planned desktop, Android and browser clients, and how they capture context
 - [Testing](docs/testing.md): test projects, the sync server container and coverage
 - [rslib bindings](src/rslib-bindings/README.md): the native bridge between `Ankit.Native` and Anki's rslib
 
