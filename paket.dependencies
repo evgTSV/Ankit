@@ -38,3 +38,9 @@ group Client
     framework: net10.0
 
     nuget FSharp.Core
+
+group Windows
+    source https://api.nuget.org/v3/index.json
+    framework: net10.0-windows
+
+    nuget Interop.UIAutomationClient 10.19041.0

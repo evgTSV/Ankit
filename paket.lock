@@ -150,3 +150,9 @@ NUGET
     System.Text.Json (10.0.13)
     TypeShape (10.0)
       FSharp.Core (>= 4.5.4)
+
+GROUP Windows
+RESTRICTION: == net10.0-windows7.0
+NUGET
+  remote: https://api.nuget.org/v3/index.json
+    Interop.UIAutomationClient (10.19041)
