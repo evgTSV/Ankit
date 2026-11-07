@@ -1,31 +1,33 @@
 # Clients
 
 Ankit clients turn text you are reading into notes: select a word, press a hotkey (or pick an entry in the selection
-menu), and a popup shows the suggestions of the server's `POST /suggestions` for that word in its sentence. They also
-cover server settings and managing decks. The server stays the place for Anki and the LLM; clients are front ends.
+menu), and a popup shows the suggestions of the server's `POST /notes/suggestions` for that word in its sentence. They
+also cover server settings and managing decks. The server stays the place for Anki and the LLM; clients are front ends.
 
-Status: the shared context extraction and the Windows capture exist, with a probe to try the capture. The desktop app,
-Android and the browser extension are planned. iOS is out of scope for now.
+Status: the desktop app's first version runs on Windows (tray, settings, the popup from a capture); deck management,
+macOS and Linux capture, Android and the browser extension are planned. iOS is out of scope for now.
 
 ## Architecture
 
 ```
 src/Clients/
   Ankit.Client.Core             F#, Fable-compatible: what every client shares
+  Ankit.Client.Http             .NET implementation of the server API (HttpClient)
+  Ankit.Client.Desktop          Avalonia desktop app (FuncUI, Elmish): tray, settings, popup
   Ankit.Client.Ocr              IOcrEngine and its Tesseract implementation, cross-platform
   Ankit.Client.Windows          Windows capture: global hotkey, UI Automation, clipboard, screenshots for OCR
   Ankit.Client.Windows.Interop  C#: the Win32 functions it calls, declared with LibraryImport
   Ankit.Client.Windows.Probe    console that prints what the capture gets, to try it in real apps
 planned:
-  Ankit.Client.Http             .NET implementation of the server API (HttpClient)
-  Ankit.Client.Ui               Avalonia.FuncUI views over the core's Elmish programs
-  Ankit.Client.Desktop          Avalonia desktop app: tray, hotkey, popup
   Ankit.Client.Android          activities and intent filters, minSdk 26
   browser-extension/            Fable + Vite, Manifest V3
 ```
 
-- **F# and Elmish.** The core holds the logic as Elmish programs (model, messages, update): capture → suggest →
-  review → save, decks, server settings. Platforms supply the views and adapters (HTTP, secure storage, capture).
+- **F# and Elmish.** The core holds the logic as Elmish programs (model, messages, update): `Popup` (term and
+  context → suggestions → drafts → notes) and `Settings` so far, decks next. Their update returns effects
+  (`Popup.Effect`, `Settings.Effect`) instead of Elmish commands, so the core needs no Elmish package and stays pure;
+  each client runs the effects with its `IAnkitApi` (`Api.fs`). Platforms supply the views and adapters (HTTP,
+  storage, capture).
 - **Fable-compatible core.** The browser extension compiles the same core to JavaScript with Fable, so the core avoids
   .NET-only APIs: no `Task` (use `Async`), no System.Text.Json, no reflection. Its API models are plain records of its
   own, not the server's `Dto.fs` (DataAnnotations, `[<CLIMutable>]`); a test will check them against
@@ -138,6 +140,26 @@ the text around the selection, but Play restricts it and it reads every screen, 
 
 A `contextMenus` entry for selections and a content script: the selection's `Range` and the text of its enclosing
 block element are the capture, so extension contexts are the same as desktop ones. The page URL is the source.
+
+## Desktop app
+
+`Ankit.Client.Desktop` is an Avalonia 12 app with FuncUI 2 components; each window's component runs a core program with
+`ctx.useElmish`, and `Effects.fs` turns the program's effects into Elmish commands over `AnkitHttpApi`.
+
+- It lives in the tray (the icon is drawn in code). Clicking it, or **New note…** in its menu, opens an empty popup;
+  **Settings…** opens the server settings, which also open on the first start.
+- **Settings:** the server address and the API key (create one with `./build --key-name <name> New-Api-Key`).
+  **Test** asks the server for its decks with what was typed; **Save** keeps them in `%APPDATA%\Ankit\settings.json`
+  (`~/.config/Ankit` on Linux and macOS). The key is stored as is in that file.
+- **Popup:** on Windows, Ctrl+Alt+A reads the selection (see [Windows](#windows)) and opens the popup next to the
+  cursor with the term, its context and the source (the URL or the window title), all editable. **Suggest** asks the
+  server for drafts, which show their note type and fields, editable, each with a checkbox; **Add** adds the checked ones
+  to the chosen deck, which is preselected next time. Escape closes it.
+- It targets `net10.0` and `net10.0-windows`. Only the Windows build references the capture projects and wires the
+  hotkey (`#if WINDOWS` in `Selection.fs`); on other platforms the popup opens empty from the tray.
+
+Run it with `dotnet run --project src/Clients/Ankit.Client.Desktop -f net10.0-windows`. Avalonia's build adds
+`Avalonia.BuildServices`, which sends anonymous build telemetry; set `AVALONIA_TELEMETRY_OPTOUT=1` to turn it off.
 
 ## Server
 
