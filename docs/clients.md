@@ -12,7 +12,9 @@ Android and the browser extension are planned. iOS is out of scope for now.
 ```
 src/Clients/
   Ankit.Client.Core             F#, Fable-compatible: what every client shares
-  Ankit.Client.Windows          Windows capture: global hotkey, UI Automation, clipboard
+  Ankit.Client.Ocr              IOcrEngine and its Tesseract implementation, cross-platform
+  Ankit.Client.Windows          Windows capture: global hotkey, UI Automation, clipboard, screenshots for OCR
+  Ankit.Client.Windows.Interop  C#: the Win32 functions it calls, declared with LibraryImport
   Ankit.Client.Windows.Probe    console that prints what the capture gets, to try it in real apps
 planned:
   Ankit.Client.Http             .NET implementation of the server API (HttpClient)
@@ -72,12 +74,49 @@ starts the capture. The methods are tried in order:
    the previous content back. It only gets the selection, so the context is whatever was selected; browsers add the
    page URL in the HTML format's `SourceURL`, which becomes the note's source (only http and https: Rider puts
    `about:blank`). Apps without UI Automation text, as tried with the probe: JetBrains IDEs (Java AWT), Telegram's
-   message list (Qt; its input field has it), Acrobat Reader. The copy is the app's own, so it shows in
-   the clipboard history (Win+V): this is why it is the fallback.
-3. **Manual.** The popup takes a typed or pasted sentence and a click on the term. Selecting a whole sentence before
+   message list (Qt; its input field has it), WPS Office, Notepad++ (Scintilla), Acrobat Reader. The copy is the app's
+   own, so it shows in the clipboard history (Win+V): this is why it is the fallback.
+3. **OCR.** When the clipboard got the selection but UI Automation had no text, the text around it is read from the
+   screen: a strip of the foreground window, its full width and 100 logical pixels above and below the caret (when the
+   app reports one) or the mouse cursor. A strip of 300 is read when the selection isn't in the first one or its
+   paragraph touches the strip's edge. See [OCR](#ocr) for what happens with the pixels.
+4. **Manual.** The popup takes a typed or pasted sentence and a click on the term. Selecting a whole sentence before
    the hotkey works with the clipboard in any app that can copy.
 
 The source of a note is the URL when there is one, otherwise the window title and process.
+
+The Win32 functions are declared in `Ankit.Client.Windows.Interop`, a C# project, because `LibraryImport` is a C#
+source generator; the F# code opens its classes with `open type`. UI Automation's COM objects come from the
+`Interop.UIAutomationClient` assembly.
+
+### OCR
+
+Reading the screen is shared by the desktop platforms, only taking the screenshot is not:
+
+- `IOcrEngine` (`Ankit.Client.Ocr`) turns an image into `ScreenText`: blocks (columns or regions kept apart, e.g. a
+  project tree next to an editor), paragraphs and lines with their boxes. `TesseractOcr` implements it, upscaling the
+  image twice since screen text is smaller than Tesseract reads best. It loads only the configured languages written
+  in the script of the clipboard's text (`eng` for Latin, `rus` for Cyrillic, both for mixed text): with both loaded,
+  Tesseract reads some Latin words as look-alike Cyrillic letters ("I'd" as "Та").
+- `ScreenText.locate` (`Ankit.Client.Core`, with tests) looks for the clipboard's text in what was read: any case, any
+  whitespace between its words (it may wrap), not inside a longer word. It takes the match nearest to the anchor, lines
+  weighing more than columns, and keeps only that match's block: its paragraphs separated by blank lines, the lines of
+  a paragraph joined by spaces (the engine found the paragraphs, so a line break inside one is a wrap). The
+  clipboard's text replaces what was recognized, so recognition errors don't reach the term. A selection that isn't
+  found, e.g. misread, leaves the clipboard's selection alone.
+- The platform takes the screenshot and gives the anchor: on Windows `BitBlt` of the strip and the caret or the cursor,
+  in physical pixels (a per-monitor DPI-aware thread). macOS (ScreenCaptureKit, with the Screen Recording permission)
+  and Linux (X11, or the screenshot portal on Wayland) come with their clients. Android doesn't read the screen: it
+  would need a MediaProjection prompt.
+
+Tesseract comes from the TesseractOCR package (Apache-2.0). It bundles the native libraries for Windows, which need the
+Visual C++ 2015–2022 runtime; macOS and Linux need the system's libtesseract (Homebrew, the distribution's package). The
+trained data is `tessdata_fast` (Apache-2.0, about 4 MB a language): Windows builds of `Ankit.Client.Ocr` download it
+into `src/Clients/tessdata/` (gitignored) once and copy it to `tessdata` next to the app. `TessdataLanguages` in the
+project sets the languages downloaded (`eng;rus`), `TesseractSettings.Languages` those loaded.
+
+Reading a strip takes 0.6–2 s depending on how much text it has (an IDE with a project tree is the slow case). A
+platform's own engine could implement `IOcrEngine` later, e.g. macOS Vision, which is faster and needs no trained data.
 
 To see what an app gives, run the probe, select text and press Ctrl+Alt+A:
 

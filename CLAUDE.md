@@ -21,10 +21,11 @@ Ankit.Server (F#, Oxpecker)      HTTP API, services, background sync worker
 | `src/rslib-bindings/`             | Rust crate `ankit-rslib` (cdylib) + `csharp-gen` and `header-gen` generators  |
 | `src/Ankit.Native/`               | C# wrapper: `RslibBackend`, `RslibException`/`BackendException`, `Interop/`   |
 | `src/Ankit.Server/`               | F# server: `Dto`, `Services`, `AnkiSyncWorker`, `Handlers`, `Auth`, `ErrorHandler`, `Program` |
-| `src/Clients/`                    | Client core (F#, Fable-compatible), Windows capture and its probe, see `docs/clients.md` |
+| `src/Clients/`                    | Client core (F#, Fable-compatible), OCR, Windows capture (+ C# interop) and its probe, see `docs/clients.md` |
 | `tests/Ankit.Native.Tests/`       | xunit (C#) tests of the wrapper against a temp collection                     |
 | `tests/Ankit.Server.Tests/`       | xunit (F#) tests of services, worker, and sync against a Dockerized sync server |
-| `tests/Ankit.Client.Core.Tests/`  | xunit (F#) tests of the client core (context extraction)                      |
+| `tests/Ankit.Client.Core.Tests/`  | xunit (F#) tests of the client core (context extraction, screen text)         |
+| `tests/Ankit.Client.Ocr.Tests/`   | xunit (F#) tests of the OCR project (language choice)                         |
 | `src/rslib-bindings/tests/ffi.rs` | Rust tests of the C ABI                                                       |
 | `Scripts/build.fsx`               | FAKE build script, the single entry point for everything                      |
 | `Scripts/gen-workflow.fsx`        | Generates `.github/workflows/main.yml` (Generaptor)                          |
@@ -111,8 +112,11 @@ Fine for quick iteration once `Prepare` has run:
 ## Dependencies
 
 - **NuGet via Paket only.** Never `dotnet add package` or `<PackageReference>`. Add the package to the right group in
-  `paket.dependencies` (`WebServer`, `Native`, `Test`, `Windows`), list it in the project's `paket.references`, and run
-  `dotnet paket install` (updates `paket.lock`). Commit all three.
+  `paket.dependencies` (`WebServer`, `Native`, `Test`, `Client`, `Ocr`, `Windows`), list it in the project's
+  `paket.references`, and run `dotnet paket update --group <group>` (updates `paket.lock` for that group only;
+  `dotnet paket install` may re-resolve and bump packages in the other groups). Commit all three.
+- **Looking for an F# library**: check [awesome-fsharp](https://github.com/fsprojects/awesome-fsharp) first, then
+  general .NET packages. Mind the license (see [License](#license)).
 - **Anki version**: `group Anki` → `github ankitects/anki:<tag>` in `paket.dependencies`. After a bump: restore, keep
   `rust-toolchain.toml` equal to Anki's, `./build Prepare`, rebuild, run all tests. The sync server test image is
   built from the same tag automatically.
@@ -222,6 +226,14 @@ Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services
 - `Ankit.Client.Windows` targets `net10.0-windows` with `EnableWindowsTargeting`, so it builds on Linux and macOS CI.
   UI Automation calls run on their own MTA thread (`onMtaThread`), never on a UI thread. The clipboard fallback sends
   Ctrl+C and restores the previous content; it can't keep the copy out of the clipboard history.
+- Win32 functions are declared in the C# project `Ankit.Client.Windows.Interop` with `LibraryImport` (a C# source
+  generator, which F# can't use); F# opens its classes with `open type User32` etc. Add a new import there, never as
+  `DllImport` in F#.
+- OCR is split: `ScreenText` in the core (matching the clipboard's selection in recognized text, tested),
+  `IOcrEngine` / `TesseractOcr` in the cross-platform `Ankit.Client.Ocr` (`Ocr` Paket group), the screenshot and the
+  anchor in `Ankit.Client.Windows/Ocr.fs`. Trained data is downloaded by the `DownloadTessdata` MSBuild target of
+  `Ankit.Client.Ocr` (Windows builds only) into the gitignored `src/Clients/tessdata/`; never commit `.traineddata`
+  files. Dispose the engine at exit, Tesseract reports loaded trained data as leaks otherwise.
 - `Ankit.Client.Windows.Probe` is a console app for trying the capture in real apps (Ctrl+Alt+A); it has no tests.
 
 ## Code style
