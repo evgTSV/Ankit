@@ -55,3 +55,16 @@ group Ocr
 
     nuget TesseractOCR 5.5.2
     nuget Microsoft.Extensions.Logging.Abstractions
+
+group Desktop
+    source https://api.nuget.org/v3/index.json
+    framework: net10.0, net10.0-windows
+
+    nuget FSharp.Core
+    nuget FSharp.SystemTextJson 1.4.36
+    nuget Avalonia 12.1.5
+    nuget Avalonia.Desktop 12.1.5
+    nuget Avalonia.Themes.Fluent 12.1.5
+    nuget Avalonia.Fonts.Inter 12.1.5
+    nuget Avalonia.FuncUI 2.0.0
+    nuget Avalonia.FuncUI.Elmish 2.0.0
