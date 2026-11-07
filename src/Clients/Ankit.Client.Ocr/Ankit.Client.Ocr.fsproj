@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <NoWarn>$(NoWarn);NU1510</NoWarn>
+    <!-- Trained data for Tesseract, tessdata_fast (Apache-2.0), downloaded once; Windows only while only Windows
+         captures the screen -->
+    <TessdataDir>$(MSBuildThisFileDirectory)..\tessdata\</TessdataDir>
+    <TessdataUrl>https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/</TessdataUrl>
+    <TessdataLanguages>eng;rus</TessdataLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="OcrEngine.fs" />
+    <Compile Include="Tesseract.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="paket.references" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ankit.Client.Core\Ankit.Client.Core.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <TessdataLanguage Include="$(TessdataLanguages)" />
+  </ItemGroup>
+
+  <!-- Before AssignTargetPaths, so that the files added here are copied to the output of this and referencing projects
+       even on the first build -->
+  <Target Name="DownloadTessdata" BeforeTargets="AssignTargetPaths" Condition="'$(OS)' == 'Windows_NT'">
+    <DownloadFile SourceUrl="$(TessdataUrl)%(TessdataLanguage.Identity).traineddata" DestinationFolder="$(TessdataDir)"
+                  Condition="!Exists('$(TessdataDir)%(TessdataLanguage.Identity).traineddata')" />
+    <ItemGroup>
+      <Content Include="$(TessdataDir)%(TessdataLanguage.Identity).traineddata"
+               Link="tessdata\%(TessdataLanguage.Identity).traineddata" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
+  <Import Project="..\..\..\.paket\Paket.Restore.targets" />
+</Project>
