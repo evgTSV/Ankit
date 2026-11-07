@@ -340,20 +340,34 @@ type NotetypeInfo = {
     Name: string
     /// Field names in the order notes list their fields
     Fields: string list
+    IsCloze: bool
+    /// Its notes need an image with the occlusions drawn on it
+    IsImageOcclusion: bool
 }
 
 [<Interface>]
 type INotetypeService =
     abstract List: unit -> CommandResult<NotetypeInfo list>
+    abstract Get: notetypeId: int64 -> CommandResult<NotetypeInfo>
 
 type AnkiNotetypeService(backend: RslibBackend) =
+    let info (notetype: Notetype) = {
+        Id = notetype.Id
+        Name = notetype.Name
+        Fields = notetype.Fields |> Seq.map _.Name |> List.ofSeq
+        IsCloze = notetype.Config.Kind = Notetype.Types.Config.Types.Kind.Cloze
+        IsImageOcclusion = notetype.Config.OriginalStockKind = StockNotetype.Types.OriginalStockKind.ImageOcclusion
+    }
+
+    let get (notetypeId: int64) = backend.GetNotetype(NotetypeId(Ntid = notetypeId))
+
     interface INotetypeService with
         member _.List() =
             guardCommand (fun () ->
                 backend.GetNotetypeNames().Entries
-                |> Seq.map (fun entry -> {
-                    Id = entry.Id
-                    Name = entry.Name
-                    Fields = backend.GetFieldNames(NotetypeId(Ntid = entry.Id)).Vals |> List.ofSeq
-                })
+                |> Seq.map (fun entry -> info (get entry.Id))
                 |> List.ofSeq)
+
+        member _.Get notetypeId =
+            guardCommand (fun () -> info (get notetypeId))
+            |> whenNotFound (CommandFailed.NotFound $"Note type {notetypeId} doesn't exist")

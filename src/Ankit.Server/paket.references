@@ -4,3 +4,5 @@ group WebServer
     FSharp.SystemTextJson
     Oxpecker.OpenApi
     Swashbuckle.AspNetCore.SwaggerUI
+    Microsoft.Extensions.AI
+    Microsoft.Extensions.AI.OpenAI

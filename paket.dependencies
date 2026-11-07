@@ -9,6 +9,8 @@ group WebServer
     nuget Swashbuckle.AspNetCore.SwaggerUI 10.3.1
     nuget FsToolkit.ErrorHandling 5.2.0
     nuget FSharp.SystemTextJson 1.4.36
+    nuget Microsoft.Extensions.AI 10.11.0
+    nuget Microsoft.Extensions.AI.OpenAI 10.11.0
 
 group Native
     source https://api.nuget.org/v3/index.json

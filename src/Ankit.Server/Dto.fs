@@ -70,6 +70,92 @@ type NoteTypeDto = {
     Id: int64
     Name: string
     Fields: string array
+    IsCloze: bool
+}
+
+[<CLIMutable>]
+type SuggestNotesDto = {
+    /// The word or phrase to learn
+    [<Required(ErrorMessage = "Term is required"); MinLength(1, ErrorMessage = "Term must not be empty")>]
+    Term: string
+
+    /// Where the term was found, e.g. its sentence or paragraph; it decides which sense the cards are about
+    Context: string option
+
+    /// Title or URL of the page the context comes from
+    Source: string option
+
+    /// The note type to write the notes for. When left out the model picks one for each note among the note types
+    /// the style fits, Image Occlusion excepted, and each suggested note names its own
+    [<NumericId>]
+    NoteTypeId: int64 option
+
+    [<NumericId>]
+    DeckId: int64 option
+
+    /// How many alternative notes to suggest, 1 when left out
+    [<CountRange(1, 5)>]
+    Count: int option
+
+    /// A module from GET /suggestion-modules, Llm:Module when left out
+    Module: string option
+
+    /// A style of the module that fits the note type, or AUTO to let the model pick one for each note; the plain style
+    /// of the note type, CLOZE or CARD, when left out
+    Style: string option
+
+    /// Extra instructions for this request, e.g. "add the reading in hiragana"
+    Instructions: string array option
+}
+
+type SuggestedNoteDto = {
+    NoteTypeId: int64
+    /// One value per field of the note type, in its order, ready for POST /notes
+    Fields: string array
+}
+
+type SuggestionsDto = {
+    Notes: SuggestedNoteDto array
+    /// Notes that already contain the term, in any note type
+    ExistingNoteIds: int64 array
+}
+
+type NoteKindDto =
+    | Cloze
+    | FrontBack
+
+type SuggestionStyleDto = {
+    Id: string
+    Name: string
+    Kind: NoteKindDto
+    Description: string
+}
+
+type SuggestionModuleDto = {
+    Id: string
+    Description: string
+    /// Used when a request names no module
+    IsDefault: bool
+    Styles: SuggestionStyleDto array
+}
+
+[<RequireQualifiedAccess>]
+type HealthStatusDto =
+    | Healthy
+    | Degraded
+    | Unhealthy
+
+type HealthCheckDto = {
+    /// What is checked, e.g. llm
+    Name: string
+    Status: HealthStatusDto
+    Description: string option
+}
+
+type HealthDto = {
+    /// The worst status of the checks
+    Status: HealthStatusDto
+    Checks: HealthCheckDto array
 }
 
 type SyncDirection =

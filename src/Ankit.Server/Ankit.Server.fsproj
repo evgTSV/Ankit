@@ -12,6 +12,8 @@
     <Compile Include="Env.fs" />
     <Compile Include="Dto.fs" />
     <Compile Include="Services.fs" />
+    <Compile Include="Llm.fs" />
+    <Compile Include="Modules\Language.fs" />
     <Compile Include="AnkiSyncWorker.fs" />
     <Compile Include="ErrorHandler.fs" />
     <Compile Include="Handlers.fs" />
@@ -25,6 +27,8 @@
       <Link>.dockerignore</Link>
     </Content>
     <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="appsettings.Development.json" Condition="Exists('appsettings.Development.json')"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
     <Content Include="Dockerfile" />
     <Content Include="paket.references" />
   </ItemGroup>

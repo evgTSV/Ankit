@@ -142,12 +142,12 @@ Fine for quick iteration once `Prepare` has run:
 
 ### Ankit.Server (F#)
 
-Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services` → `AnkiSyncWorker` → `ErrorHandler` →
+Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services` → `Llm` → `Modules/Language` → `AnkiSyncWorker` → `ErrorHandler` →
 `Handlers` → `Auth` → `ApiDocs` → `Program`. A new file must be added to the `.fsproj` in the right position.
 
 - **Services** (`Services.fs`): interface + `Anki*` implementation taking `RslibBackend` (and others) by constructor,
   registered as singletons in `Program.fs`. `IErrorTextService`, `IAuthService`, `ISyncService`, `IDeckService`,
-  `INoteService`, `INotetypeService`.
+  `INoteService`, `INotetypeService`, `ICardSuggestionService` (in `Llm.fs`).
 - **Errors are values.** Services catch only expected backend exceptions with `ServiceUtils.guardCall` /
   `guardCommand` / `guardCallSync` and return `Result`; genuine bugs propagate (`reraise ()`) to
   `ErrorHandler.errorHandler` (500). Error unions are `[<RequireQualifiedAccess>]`:
@@ -164,6 +164,28 @@ Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services
 - **Handlers** (`Handlers.fs`): `query` for reads, `change` for writes, `submit` for full sync. Bind bodies with
   `ModelBinder.bindOrDeclineJson` / `bindOrDeclineJson1` (with a route value) / `bindOrDeclineQuery`; they validate
   DataAnnotations and answer 422 with `fieldErrors`. Routes live in `Program.fs` (`routef "/notes/{%d}"` for `int64`).
+- **Card suggestions** (`Llm.fs`): `ICardSuggestionService` drafts notes with an `IChatClient`
+  (Microsoft.Extensions.AI) over the OpenAI SDK, so any OpenAI-compatible endpoint works (`Llm` section). It reads
+  the collection directly and never goes through the worker: an LLM call takes seconds and the worker runs jobs one
+  at a time. A request names a note type, or the model picks one per note among the `SuggestionTarget`s
+  (`ChosenStyle.targets`: the note types the style fits, never Image Occlusion); a single target keeps the flat
+  `{"notes": [{field: value}]}` shape, several use `{"noteType", "fields"}` with an `anyOf` schema branch per type.
+  The JSON schema is built from the field names; answers are parsed leniently (outermost `{...}`), sanitized
+  (`CardHtml.sanitize`, the context is untrusted web text) and filtered by the style of their note type.
+  `LlmClient.create` validates the settings at startup; without `Llm:Model` the route answers 503.
+  `LlmHealthCheck` (an ASP.NET `IHealthCheck`, served by `GET /health` and run once at startup) lists the models.
+- **Suggestion modules** (`Llm.fs` core, `Modules/*.fs`): what notes are about is a `SuggestionModule` value: id,
+  prompt lines about the subject (`Context`) and its `SuggestionStyle`s (id, kind `Cloze`/`FrontBack`, description,
+  prompt rules, `Accepts` check on the sanitized fields). The core owns everything shared: the prompt skeleton, the
+  plain styles `CLOZE`/`CARD` (`Styles`), `AUTO` (`ChosenStyle`: the model picks among the module's styles of the
+  note type's kind), and rejecting cloze markup on front/back note types. Modules know nothing about the LLM client
+  or the collection. `Modules/Language.fs` (`LANGUAGE`, the default, `GUIDED_CLOZE`, `COLLOCATION_IN_CONTEXT`,
+  settings in `Llm:Modules:Language`) and `SuggestionModule.general` (`GENERAL`, plain styles only); `Program.fs`
+  builds `SuggestionModules` from the list and `Llm:Module`. Style and module ids are strings matched with
+  `Styles.same` (case and underscores ignored). A new module: a file in `Modules/`, added to the `.fsproj` after
+  `Llm.fs` and to the list in `Program.fs`.
+  The OpenAI client throws an `AggregateException` of its attempts after retries, `(|LlmError|_|)` unwraps it.
+  Service tests use a fake `IChatClient` (`CardSuggestionServiceTests`).
 - **Auth** (`Auth.fs`): API keys from `Ankit:ApiKeys` (name + `sha256:` hash, created with `./build
   --key-name <name> New-Api-Key`), checked by the `ApiKey` authentication scheme. Endpoints are public unless wrapped in
   `requireApiKey` (a route or a whole `GET [ ... ]` group), which adds the policy and the OpenAPI security
@@ -180,7 +202,8 @@ Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services
   fix F# types: options, fieldless unions (string enums), non-option record fields (not nullable). Check the
   generated spec after adding a route or DTO.
 - **DTOs** (`Dto.fs`): `[<CLIMutable>]` records with DataAnnotations (`Required`, `MinLength`, custom `NumericId`).
-  JSON is camelCase (`Utils.jsonOptions`); options are skippable; fieldless unions are written as their case name in
+  JSON is camelCase (`Utils.jsonOptions`); an option field may be missing or `null` (both read as `None`, and
+  `None` is not written); fieldless unions are written as their case name in
   `SNAKE_UPPER` (`Utils.unionTagNaming`) and read case-insensitively (`"direction": "upload"` works). Conversions
   between DTOs and service types belong in `Handlers.fs`, because `Dto.fs` compiles before `Services.fs`.
 - **Responses**: create → `201 {"id"}`, update/delete → `204`, reads → `200` JSON, errors → `ApiError` JSON

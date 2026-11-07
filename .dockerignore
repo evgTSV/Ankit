@@ -32,3 +32,4 @@ src/rslib-bindings/tools
 src/rslib-bindings/include
 src/Ankit.Native/Generated
 **/TestResults
+**/appsettings.Development.json

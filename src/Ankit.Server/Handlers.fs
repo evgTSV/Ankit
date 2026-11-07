@@ -5,8 +5,10 @@ open System.Threading.Channels
 open System.Threading.Tasks
 open Ankit.Server
 open Ankit.Server.Dto
+open Ankit.Server.Llm
 open Ankit.Server.Services
 open Microsoft.AspNetCore.Http
+open Microsoft.Extensions.Diagnostics.HealthChecks
 open Microsoft.Extensions.Logging
 open Oxpecker
 open type Microsoft.AspNetCore.Http.StatusCodes
@@ -165,6 +167,74 @@ let deleteNote (noteId: int64) : EndpointHandler =
         let notes = ctx.GetService<INoteService>()
         change (fun () -> notes.Delete noteId) (fun () -> noContent) ctx
 
+let suggestNotes (dto: SuggestNotesDto) : EndpointHandler =
+    fun ctx ->
+        task {
+            let suggestions = ctx.GetService<ICardSuggestionService>()
+
+            let request = {
+                Term = dto.Term.Trim()
+                Context = dto.Context
+                Source = dto.Source
+                NotetypeId = dto.NoteTypeId
+                DeckId = dto.DeckId
+                Count = dto.Count |> Option.defaultValue 1
+                Module = dto.Module
+                Style = dto.Style
+                Instructions = dto.Instructions |> Option.map List.ofArray |> Option.defaultValue []
+            }
+
+            match! suggestions.Suggest(request, ctx.RequestAborted) with
+            | Ok suggested ->
+                let dto: SuggestionsDto = {
+                    Notes =
+                        suggested.Notes
+                        |> List.map (fun note -> {
+                            SuggestedNoteDto.NoteTypeId = note.NotetypeId
+                            Fields = Array.ofList note.Fields
+                        })
+                        |> Array.ofList
+                    ExistingNoteIds = Array.ofList suggested.ExistingNoteIds
+                }
+
+                return! writeJson Status200OK dto ctx
+            | Error SuggestFailed.NotConfigured ->
+                return!
+                    writeError
+                        ctx
+                        Status503ServiceUnavailable
+                        "Card suggestions are off: set Llm:Model, and Llm:Provider for a provider other than OpenAI"
+                        None
+            | Error(SuggestFailed.Command error) -> return! writeCommandError ctx error
+            | Error(SuggestFailed.LlmFailed message) -> return! writeError ctx Status502BadGateway message None
+            | Error(SuggestFailed.InvalidOutput message) ->
+                return! writeError ctx Status502BadGateway $"The model's answer can't be used: %s{message}" None
+        }
+        :> Task
+
+let listSuggestionModules: EndpointHandler =
+    fun ctx ->
+        let modules = ctx.GetService<SuggestionModules>()
+
+        let toStyle (style: SuggestionStyle) : SuggestionStyleDto = {
+            Id = style.Id
+            Name = style.Name
+            Kind =
+                match style.Kind with
+                | NoteKind.Cloze -> NoteKindDto.Cloze
+                | NoteKind.FrontBack -> NoteKindDto.FrontBack
+            Description = style.Description
+        }
+
+        let toDto (suggestionModule: SuggestionModule) : SuggestionModuleDto = {
+            Id = suggestionModule.Id
+            Description = suggestionModule.Description
+            IsDefault = suggestionModule.Id = modules.Default.Id
+            Styles = Styles.ofModule suggestionModule |> List.map toStyle |> Array.ofList
+        }
+
+        writeJson Status200OK (modules.All |> List.map toDto) ctx
+
 // --- Note types ---
 
 let listNoteTypes: EndpointHandler =
@@ -175,9 +245,46 @@ let listNoteTypes: EndpointHandler =
             Id = notetype.Id
             Name = notetype.Name
             Fields = Array.ofList notetype.Fields
+            IsCloze = notetype.IsCloze
         }
 
         query notetypes.List (fun list -> writeJson Status200OK (list |> List.map toDto)) ctx
+
+// --- Health ---
+
+let health: EndpointHandler =
+    fun ctx ->
+        task {
+            let! report =
+                ctx.GetService<HealthCheckService>().CheckHealthAsync(ctx.RequestAborted)
+
+            let status (status: HealthStatus) =
+                match status with
+                | HealthStatus.Healthy -> HealthStatusDto.Healthy
+                | HealthStatus.Degraded -> HealthStatusDto.Degraded
+                | _ -> HealthStatusDto.Unhealthy
+
+            let dto = {
+                Status = status report.Status
+                Checks =
+                    report.Entries
+                    |> Seq.map (fun (KeyValue(name, entry)) -> {
+                        Name = name
+                        Status = status entry.Status
+                        Description = Option.ofObj entry.Description
+                    })
+                    |> Array.ofSeq
+            }
+
+            let code =
+                if report.Status = HealthStatus.Unhealthy then
+                    Status503ServiceUnavailable
+                else
+                    Status200OK
+
+            return! writeJson code dto ctx
+        }
+        :> Task
 
 // --- Sync ---
 

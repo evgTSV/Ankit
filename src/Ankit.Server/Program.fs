@@ -7,6 +7,7 @@ open System.Threading.Channels
 open Anki.Collection
 open Ankit.Server
 open Ankit.Server.Auth
+open Ankit.Server.Llm
 open Ankit.Server.Handlers.ModelBinder
 open Ankit.Server.Env
 open Ankit.Server.Services
@@ -19,6 +20,8 @@ open Oxpecker.OpenApi
 open Microsoft.AspNetCore.Builder
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Diagnostics.HealthChecks
+open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open Microsoft.Extensions.Options
 
@@ -40,6 +43,12 @@ let endpoints = [
 
         route "/note-types" Handlers.listNoteTypes
         |> describe "ListNoteTypes" "List note types with their fields in order" None [ ok<NoteTypeDto[]> ]
+
+        route "/suggestion-modules" Handlers.listSuggestionModules
+        |> describe "ListSuggestionModules" "List the modules for note suggestions with their styles" None [ ok<SuggestionModuleDto[]> ]
+
+        route "/health" Handlers.health
+        |> describe "Health" "Check that the services the server depends on, such as the LLM server, answer" None [ ok<HealthDto>; unhealthy ]
     ]
     |> requireApiKey
     POST [
@@ -50,6 +59,10 @@ let endpoints = [
         route "/notes" <| bindOrDeclineJson Handlers.addNote
         |> describe "AddNote" "Add a note to a normal deck"
             (Some typeof<AddNoteDto>) [ created; invalid; shuttingDown ]
+
+        route "/notes/suggestions" <| bindOrDeclineJson Handlers.suggestNotes
+        |> describe "SuggestNotes" "Draft notes about a term in its context with the LLM, without adding them"
+            (Some typeof<SuggestNotesDto>) [ ok<SuggestionsDto>; invalid; llmFailed; llmOff ]
 
         route "/sync/full" <| bindOrDeclineJson Handlers.fullSync
         |> describe "FullSync" "Replace the server's collection with the local one (upload) or the other way round (download)"
@@ -96,7 +109,9 @@ let openBackend (sp: IServiceProvider) : RslibBackend =
 
     backend
 
-let configureServices (configuration: IConfiguration) (apiKeys: ApiKeyStore) (services: IServiceCollection) =
+let configureServices (configuration: IConfiguration) (apiKeys: ApiKeyStore) (llm: LlmClient) (suggestionModules: SuggestionModules) (services: IServiceCollection) =
+    services.AddHealthChecks().AddCheck<LlmHealthCheck>("llm") |> ignore
+
     services
         .Configure<AnkitServerSettings>(configuration.GetSection AnkitServerSettingsSection)
         .Configure<SyncServerSettings>(configuration.GetSection SyncServerSettingsSection)
@@ -122,6 +137,9 @@ let configureServices (configuration: IConfiguration) (apiKeys: ApiKeyStore) (se
         .AddSingleton<IDeckService, AnkiDeckService>()
         .AddSingleton<INoteService, AnkiNoteService>()
         .AddSingleton<INotetypeService, AnkiNotetypeService>()
+        .AddSingleton<LlmClient>(llm)
+        .AddSingleton<SuggestionModules>(suggestionModules)
+        .AddSingleton<ICardSuggestionService, AnkiCardSuggestionService>()
         .AddHostedService<AnkiSyncWorker>()
     |> addApiKeyAuth apiKeys
 
@@ -148,11 +166,49 @@ let apiKeys =
         eprintfn $"%s{message}"
         exit 1
 
-configureServices builder.Configuration apiKeys builder.Services
+let llmSettings = builder.Configuration.GetSection(LlmSettingsSection).Get<LlmSettings>()
+
+let startupValue (result: Result<'a, string>) =
+    match result with
+    | Ok value -> value
+    | Error message ->
+        eprintfn $"%s{message}"
+        exit 1
+
+let llm = startupValue (LlmClient.create llmSettings)
+
+let suggestionModules =
+    let language =
+        Modules.Language.create (builder.Configuration.GetSection(Modules.Language.SettingsSection).Get<Modules.Language.LanguageSettings>())
+
+    let defaultModule =
+        if isNull (box llmSettings) || String.IsNullOrWhiteSpace llmSettings.Module then
+            language.Id
+        else
+            llmSettings.Module
+
+    startupValue (SuggestionModules.create [ language; SuggestionModule.general ] defaultModule)
+
+configureServices builder.Configuration apiKeys llm suggestionModules builder.Services
 
 let app = builder.Build()
 configureApp app
 app.MapOpenApi() |> ignore
+
+match llm.Chat with
+| Some _ -> app.Logger.LogInformation("Card suggestions use {Model} at {Provider}, module {Module} by default", llm.Settings.Model, llm.Settings.Provider, suggestionModules.Default.Id)
+| None -> app.Logger.LogInformation("Card suggestions are off, Llm:Model is empty")
+
+if llm.Models.IsSome then
+    app.Lifetime.ApplicationStarted.Register(fun () ->
+        task {
+            let! result = (LlmHealthCheck llm :> IHealthCheck).CheckHealthAsync(HealthCheckContext(), app.Lifetime.ApplicationStopping)
+
+            if result.Status <> HealthStatus.Healthy then
+                app.Logger.LogWarning("Card suggestions will fail until the LLM server answers: {Reason}", result.Description)
+        }
+        |> ignore)
+    |> ignore
 
 if apiKeys.IsDisabled then
     app.Logger.LogWarning("Ankit:DisableAuth is set, the API is open to anyone who can reach it")
