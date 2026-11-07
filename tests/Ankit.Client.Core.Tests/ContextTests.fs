@@ -244,3 +244,20 @@ let ``Leading colons and bullets are dropped from the context`` () =
 
     let result = extracted text "carried out"
     Assert.Equal("to bring to a successful issue : COMPLETE, ACCOMPLISH carried out the assignment", result.Context)
+
+[<Fact>]
+let ``A bullet inside a paragraph starts a list item`` () =
+    let text =
+        "Mermaid diagrams and charts are now rendered using our new library Pele, compatible with the latest Mermaid 12.1.0 syntax. • Diagrams now appear faster and use the colors and fonts of your theme. • Diagrams are now responsive to the width of a note."
+
+    let result = extracted text "appear"
+    Assert.Equal("Diagrams now appear faster and use the colors and fonts of your theme.", result.Context)
+
+    Assert.Equal<string list>(
+        [
+            "Mermaid diagrams and charts are now rendered using our new library Pele, compatible with the latest Mermaid 12.1.0 syntax."
+            "Diagrams now appear faster and use the colors and fonts of your theme."
+            "Diagrams are now responsive to the width of a note."
+        ],
+        sentenceTexts text
+    )

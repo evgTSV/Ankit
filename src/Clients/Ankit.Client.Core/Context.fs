@@ -168,11 +168,21 @@ let private isAbbreviation (text: string) (dot: int) =
     let word = wordBefore text dot
     abbreviations.Contains word || word.Length = 1 && Char.IsUpper text[dot - 1]
 
+let private bullets = set [ '•'; '◦'; '▪'; '‣' ]
+
+/// A bullet between spaces starts a list item: some apps (Obsidian) put a list in one paragraph without line breaks
+let private isBullet (text: string) (i: int) =
+    bullets.Contains text[i]
+    && (i = 0 || isSpace text[i - 1])
+    && (i + 1 = text.Length || isSpace text[i + 1])
+
 /// A line break that separates blocks: a blank line, a paragraph separator, or one between lines that don't read as one
 /// wrapped sentence. Web pages separate headings, list items and buttons by single line breaks, while a hard-wrapped
 /// text (a PDF) continues on the next line in lowercase or after a comma
 let private isBlockBreak (text: string) (i: int) =
     if text[i] = ' ' then
+        true
+    elif isBullet text i then
         true
     elif not (isLineBreak text i) then
         false
@@ -222,7 +232,7 @@ let private segments (text: string) =
         let mutable s = start
         let mutable e = finish
 
-        while s < e && isSpace text[s] do
+        while s < e && (isSpace text[s] || isBullet text s) do
             s <- s + 1
 
         while e > s && isSpace text[e - 1] do
