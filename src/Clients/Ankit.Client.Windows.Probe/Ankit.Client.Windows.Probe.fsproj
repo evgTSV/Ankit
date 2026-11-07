@@ -11,6 +11,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="paket.references" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Ankit.Client.Windows\Ankit.Client.Windows.fsproj" />
   </ItemGroup>
 
