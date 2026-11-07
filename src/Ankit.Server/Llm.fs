@@ -362,12 +362,12 @@ module private Prompt =
 
     let private nonEmpty (text: string option) = text |> Option.filter (String.IsNullOrWhiteSpace >> not)
 
+    let private indented (lines: string list) = lines |> List.map (fun line -> "- " + line)
+
     let private bullets (title: string) (items: string list) =
         match items |> List.filter (String.IsNullOrWhiteSpace >> not) with
         | [] -> []
-        | items -> title :: (items |> List.map (fun item -> "- " + item))
-
-    let private indented (lines: string list) = lines |> List.map (fun line -> "- " + line)
+        | items -> title :: indented items
 
     let private styleRules (kind: NoteKind) (chosen: ChosenStyle) = [
         match chosen with
