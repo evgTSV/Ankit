@@ -7,6 +7,7 @@ open System.Runtime.InteropServices
 open System.Text
 open System.Threading
 open Ankit.Client.Core.Context
+open Ankit.Client.Ocr
 open Ankit.Client.Windows.Interop
 open type Ankit.Client.Windows.Interop.User32
 open type Ankit.Client.Windows.Interop.Kernel32
@@ -19,6 +20,8 @@ type CaptureMethod =
     /// The text around from UI Automation, the selection from the clipboard: UI Automation reported a selection that
     /// cuts words, e.g. in Edge's PDF viewer
     | UiAutomationAndClipboard
+    /// The text around read from the screen, the selection from the clipboard: the app has no UI Automation text
+    | OcrAndClipboard
 
 type Source = {
     Process: string
@@ -391,17 +394,34 @@ let combine (uia: Captured) (clipboard: Captured) =
         Details = $"%s{uia.Details}; selection from the clipboard"
     })
 
-/// UI Automation, checked with the clipboard when its selection cuts words; the clipboard alone when UI Automation
-/// can't read the app. The errors of both when neither works
-let choose (uia: Result<Captured, string>) (clipboard: Lazy<Result<Captured, string>>) =
+/// The clipboard's selection with the text around it read from the screen; the clipboard alone when OCR fails
+let private withScreenText (ocr: IOcrEngine) (clipboard: Captured) =
+    let c = clipboard.Capture
+    let selected = c.Text.Substring(c.SelectionStart, c.SelectionLength)
+
+    match onMtaThread (TimeSpan.FromSeconds 15.0) (fun () -> Ocr.around ocr selected) with
+    | Ok(capture, details) -> {
+        clipboard with
+            Capture = capture
+            Method = CaptureMethod.OcrAndClipboard
+            Details = $"%s{clipboard.Details}; OCR: %s{details}"
+      }
+    | Error e -> { clipboard with Details = $"%s{clipboard.Details}; OCR failed: %s{e}" }
+
+/// UI Automation, checked with the clipboard when its selection cuts words; the clipboard when UI Automation can't
+/// read the app, with the text around read from the screen when OCR is set up. The errors of both when neither works
+let choose (ocr: IOcrEngine option) (uia: Result<Captured, string>) (clipboard: Lazy<Result<Captured, string>>) =
     match uia with
     | Ok uia when isWordAligned uia.Capture -> Ok uia
     | uia ->
         match uia, clipboard.Force() with
         | Ok uia, Ok clipboard -> Ok(combine uia clipboard |> Option.defaultValue clipboard)
         | Ok uia, Error _ -> Ok uia
-        | Error _, Ok clipboard -> Ok clipboard
+        | Error _, Ok clipboard ->
+            match ocr with
+            | Some ocr -> Ok(withScreenText ocr clipboard)
+            | None -> Ok clipboard
         | Error uia, Error clipboard -> Error $"UI Automation: %s{uia}; clipboard: %s{clipboard}"
 
-let selection () =
-    choose (UiAutomation.capture ()) (lazy (Clipboard.capture ()))
+let selection (ocr: IOcrEngine option) =
+    choose ocr (UiAutomation.capture ()) (lazy (Clipboard.capture ()))

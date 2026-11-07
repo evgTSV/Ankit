@@ -6,6 +6,7 @@ open System
 open System.Diagnostics
 open System.Threading
 open Ankit.Client.Core.Context
+open Ankit.Client.Ocr
 open Ankit.Client.Windows
 open Ankit.Client.Windows.Capture
 
@@ -42,6 +43,8 @@ let private timed (f: unit -> 'T) =
     let result = f ()
     result, watch.Elapsed
 
+let private ocr = new TesseractOcr(TesseractSettings.defaults) :> IOcrEngine
+
 let private probe () =
     lock gate (fun () ->
         let source = Capture.source None
@@ -52,12 +55,12 @@ let private probe () =
         let clipboard, clipboardTime = timed Clipboard.capture
         report "Clipboard" clipboard clipboardTime
         // What the client would use, from the two results above instead of a second copy
-        let chosen = choose uia (lazy clipboard)
+        let chosen, chosenTime = timed (fun () -> choose (Some ocr) uia (lazy clipboard))
 
         let methodName =
             chosen |> Result.map (fun c -> $"%A{c.Method}") |> Result.defaultValue "none"
 
-        report $"Chosen: %s{methodName}" chosen TimeSpan.Zero)
+        report $"Chosen: %s{methodName}" chosen chosenTime)
 
 [<EntryPoint>]
 let main _ =
@@ -75,4 +78,5 @@ let main _ =
             quit.Set())
 
         quit.Wait()
+        lock gate ocr.Dispose
         0
