@@ -48,7 +48,8 @@ let ``Several selected words stay one term`` () =
         extracted "They had to call off the meeting at the last minute." "call off"
 
     Assert.Equal("call off", result.Term)
-    Assert.Equal("all of", (extracted "She ate all of the cake." "all of").Term)
+    // Cutting both words widens to them
+    Assert.Equal("call off", (extracted "They had to call off the meeting." "all of").Term)
 
 [<Fact>]
 let ``Text is split at sentence ends`` () =
