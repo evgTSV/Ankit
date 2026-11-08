@@ -48,6 +48,7 @@ let ``Several selected words stay one term`` () =
         extracted "They had to call off the meeting at the last minute." "call off"
 
     Assert.Equal("call off", result.Term)
+    Assert.Equal("all of", (extracted "She ate all of the cake." "all of").Term)
 
 [<Fact>]
 let ``Text is split at sentence ends`` () =
@@ -72,6 +73,16 @@ let ``A dot followed by a lowercase word doesn't end a sentence`` () =
     Assert.Equal<string list>(
         [ "Prices rose by approx. ten percent... and then fell." ],
         sentenceTexts "Prices rose by approx. ten percent... and then fell."
+    )
+
+[<Fact>]
+let ``An abbreviation followed by a capitalized name doesn't end a sentence`` () =
+    Assert.Equal<string list>(
+        [
+            "The method, cf. Smith and Jones, was later improved by Prof. Lee and St. John."
+            "It works."
+        ],
+        sentenceTexts "The method, cf. Smith and Jones, was later improved by Prof. Lee and St. John. It works."
     )
 
 [<Fact>]
@@ -102,7 +113,7 @@ let ``Context is the sentence with the term`` () =
     )
 
 [<Fact>]
-let ``A short sentence gets its neighbours`` () =
+let ``A short sentence gets the one before it first, then the one after, until the context is long enough`` () =
     let text =
         "The storm had raged all night and flooded the lower streets of the town. Then it stopped. The morning was quiet."
 
@@ -112,6 +123,11 @@ let ``A short sentence gets its neighbours`` () =
         "The storm had raged all night and flooded the lower streets of the town. Then it stopped.",
         result.Context
     )
+
+    let text =
+        "The storm raged all night long. Then it stopped. The morning after it was quiet and very calm."
+
+    Assert.Equal(text, (extracted text "stopped").Context)
 
 [<Fact>]
 let ``The occurrence that was selected is the one found`` () =
@@ -182,9 +198,9 @@ let ``A block without an end mark is a sentence`` () =
 
 [<Fact>]
 let ``Embedded objects are spaces and a short block gets no neighbours from other blocks`` () =
-    let text = "￼\n￼\n￼\nThis is a promt in a textbox\nDeepThink\n￼\nSearch"
-    let result = extracted text "promt"
-    Assert.Equal("This is a promt in a textbox", result.Context)
+    let text = "￼\n￼\n￼\nThis is a prompt in a textbox\nDeepThink\n￼\nSearch"
+    let result = extracted text "prompt"
+    Assert.Equal("This is a prompt in a textbox", result.Context)
 
 [<Fact>]
 let ``A hard-wrapped line continues in lowercase or after a colon`` () =
