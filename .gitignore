@@ -11,3 +11,4 @@ coverage-results/
 /src/Ankit.Native/Generated/
 .env
 /src/Ankit.Server/appsettings.Development.json
+Properties/
