@@ -6,6 +6,7 @@ open System.Diagnostics
 open System.Runtime.InteropServices
 open System.Text
 open System.Threading
+open System.Threading.Tasks
 open Ankit.Client.Core.Context
 open Ankit.Client.Windows.Win32
 open Interop.UIAutomationClient
@@ -49,26 +50,17 @@ let source (url: string option) =
         Url = url
     }
 
-/// Runs f on its own MTA thread: UI Automation calls into other processes and must stay off a UI thread, and a hung
-/// app must not hang the caller
+/// Runs f on a thread pool thread, which is MTA: UI Automation calls into other processes and must stay off a UI
+/// thread, and a hung app must not hang the caller
 let private onMtaThread (timeout: TimeSpan) (f: unit -> Result<'T, string>) =
-    let mutable result = Error "Timed out"
+    let work =
+        Task.Run(fun () ->
+            try
+                f ()
+            with ex ->
+                Error ex.Message)
 
-    let thread =
-        Thread(
-            (fun () ->
-                result <-
-                    try
-                        f ()
-                    with ex ->
-                        Error ex.Message),
-            IsBackground = true
-        )
-
-    thread.SetApartmentState ApartmentState.MTA
-    thread.Start()
-
-    if thread.Join timeout then result else Error "Timed out"
+    if work.Wait timeout then work.Result else Error "Timed out"
 
 module UiAutomation =
     let private automationClsid = Guid "e22ad333-b25f-460c-83d0-0581107395c9"

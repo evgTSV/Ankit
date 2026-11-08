@@ -61,8 +61,8 @@ starts the capture. The methods are tried in order:
    document), gives the selection as a text range. The range expanded to its paragraph is the text around it; when that
    paragraph is short, possibly one line of a hard-wrapped PDF, two lines on each side join it. The selection's offset
    is the length of the text from the paragraph start to the selection, then checked against the text, since providers
-   count line breaks and embedded objects differently. Password fields are skipped. Calls run on their own MTA thread
-   with 1-second UI Automation timeouts, so a hung app can't hang the client.
+   count line breaks and embedded objects differently. Password fields are skipped.
+   Calls run on a thread pool thread (MTA) with 1-second UI Automation timeouts, so a hung app can't hang the client.
 
    Some providers report a wrong selection: Edge's PDF viewer gives a range a few characters off, with the right text
    around it. A selection that cuts words (or touches an edge of the text, after one more paragraph on each side) is

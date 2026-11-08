@@ -220,8 +220,8 @@ Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services
   models are its own records, not the server's DTOs. `Context.extract` turns a platform's `Capture` (text, selection
   start and length) into the term and its sentence.
 - `Ankit.Client.Windows` targets `net10.0-windows` with `EnableWindowsTargeting`, so it builds on Linux and macOS CI.
-  UI Automation calls run on their own MTA thread (`onMtaThread`), never on a UI thread. The clipboard fallback sends
-  Ctrl+C and restores the previous content; it can't keep the copy out of the clipboard history.
+  UI Automation calls run on a thread pool thread, which is MTA (`onMtaThread`), never on a UI thread. The clipboard
+  fallback sends Ctrl+C and restores the previous content; it can't keep the copy out of the clipboard history.
 - `Ankit.Client.Windows.Probe` is a console app for trying the capture in real apps (Ctrl+Alt+A); it has no tests.
 
 ## Code style
