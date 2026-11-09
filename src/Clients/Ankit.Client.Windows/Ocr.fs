@@ -34,6 +34,43 @@ let private anchor (hwnd: nativeint) =
         GetCursorPos &point |> ignore
         point.X, point.Y
 
+let private fileHeaderSize = 14
+
+/// 96 DPI
+let private pixelsPerMeter = 3780
+
+/// BITMAPFILEHEADER: the "BM" signature, the file size, two reserved words and where the pixels start
+let private writeFileHeader (writer: BinaryWriter) (header: BitmapInfoHeader) =
+    let pixelsOffset = fileHeaderSize + int header.Size
+    writer.Write(Encoding.ASCII.GetBytes "BM")
+    writer.Write(pixelsOffset + int header.SizeImage)
+    writer.Write 0s
+    writer.Write 0s
+    writer.Write pixelsOffset
+
+let private writeInfoHeader (writer: BinaryWriter) (header: BitmapInfoHeader) =
+    writer.Write header.Size
+    writer.Write header.Width
+    writer.Write header.Height
+    writer.Write header.Planes
+    writer.Write header.BitCount
+    writer.Write header.Compression
+    writer.Write header.SizeImage
+    writer.Write header.XPelsPerMeter
+    writer.Write header.YPelsPerMeter
+    writer.Write header.ClrUsed
+    writer.Write header.ClrImportant
+
+/// A .bmp file of the pixels GetDIBits read with this header
+let private bmpFile (header: BitmapInfoHeader) (pixels: byte[]) =
+    use stream = new MemoryStream()
+    use writer = new BinaryWriter(stream)
+    writeFileHeader writer header
+    writeInfoHeader writer header
+    writer.Write pixels
+    writer.Flush()
+    stream.ToArray()
+
 /// A 24-bit bottom-up BMP of a screen area, which Leptonica reads without extra libraries
 let private screenshot (area: Box) =
     let width = area.Right - area.Left
@@ -60,26 +97,10 @@ let private screenshot (area: Box) =
         GetDIBits(memory, bitmap, 0u, uint32 height, pixels, &header, DIB_RGB_COLORS)
         |> ignore
 
-        use stream = new MemoryStream()
-        use writer = new BinaryWriter(stream)
-        writer.Write(Encoding.ASCII.GetBytes "BM")
-        writer.Write(14 + 40 + pixels.Length)
-        writer.Write 0
-        writer.Write(14 + 40)
-        writer.Write 40
-        writer.Write width
-        writer.Write height
-        writer.Write 1s
-        writer.Write 24s
-        writer.Write 0
-        writer.Write pixels.Length
-        writer.Write 3780
-        writer.Write 3780
-        writer.Write 0
-        writer.Write 0
-        writer.Write pixels
-        writer.Flush()
-        stream.ToArray()
+        header.SizeImage <- uint32 pixels.Length
+        header.XPelsPerMeter <- pixelsPerMeter
+        header.YPelsPerMeter <- pixelsPerMeter
+        bmpFile header pixels
     finally
         DeleteObject bitmap |> ignore
         DeleteDC memory |> ignore
