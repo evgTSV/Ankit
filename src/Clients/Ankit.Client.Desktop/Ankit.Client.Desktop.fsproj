@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
+    <NoWarn>$(NoWarn);NU1510</NoWarn>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AssemblyName>Ankit</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Store.fs" />
+    <Compile Include="Effects.fs" />
+    <Compile Include="Views.fs" />
+    <Compile Include="Selection.fs" />
+    <Compile Include="Shell.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="paket.references" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ankit.Client.Core\Ankit.Client.Core.fsproj" />
+    <ProjectReference Include="..\Ankit.Client.Http\Ankit.Client.Http.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+    <ProjectReference Include="..\Ankit.Client.Ocr\Ankit.Client.Ocr.fsproj" />
+    <ProjectReference Include="..\Ankit.Client.Windows\Ankit.Client.Windows.fsproj" />
+  </ItemGroup>
+
+  <Import Project="..\..\..\.paket\Paket.Restore.targets" />
+</Project>
