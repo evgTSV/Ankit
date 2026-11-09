@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <Compile Include="Context.fs" />
+    <Compile Include="ScreenText.fs" />
   </ItemGroup>
 
   <ItemGroup>

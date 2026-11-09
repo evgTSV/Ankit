@@ -1,0 +1,3 @@
+group Ocr
+    TesseractOCR
+    Microsoft.Extensions.Logging.Abstractions

@@ -6,8 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Win32.fs" />
     <Compile Include="Hotkey.fs" />
+    <Compile Include="Ocr.fs" />
     <Compile Include="Capture.fs" />
   </ItemGroup>
 
@@ -17,6 +17,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Ankit.Client.Core\Ankit.Client.Core.fsproj" />
+    <ProjectReference Include="..\Ankit.Client.Ocr\Ankit.Client.Ocr.fsproj" />
+    <ProjectReference Include="..\Ankit.Client.Windows.Interop\Ankit.Client.Windows.Interop.csproj" />
   </ItemGroup>
 
   <Import Project="..\..\..\.paket\Paket.Restore.targets" />

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <NoWarn>$(NoWarn);NU1510</NoWarn>
+    <TessdataDir>$(MSBuildThisFileDirectory)..\..\..\paket-files\tessdata\tesseract-ocr\tessdata_fast\</TessdataDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="OcrEngine.fs" />
+    <Compile Include="Tesseract.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="paket.references" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ankit.Client.Core\Ankit.Client.Core.fsproj" />
+  </ItemGroup>
+
+  <!-- Trained data from the Paket group Tessdata; a target, so that files restored by this build are found too -->
+  <Target Name="IncludeTessdata" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <Tessdata Include="$(TessdataDir)*.traineddata" />
+      <Content Include="@(Tessdata)" Link="tessdata\%(Tessdata.Filename)%(Tessdata.Extension)"
+               CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
+  <Import Project="..\..\..\.paket\Paket.Restore.targets" />
+</Project>
