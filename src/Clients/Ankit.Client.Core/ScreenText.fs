@@ -45,7 +45,6 @@ module Box =
         Bottom = box.Bottom + dy
     }
 
-/// Moves image coordinates to the screen
 let offset (dx: int) (dy: int) (screen: ScreenText) = {
     Area = Box.offset dx dy screen.Area
     Blocks =
