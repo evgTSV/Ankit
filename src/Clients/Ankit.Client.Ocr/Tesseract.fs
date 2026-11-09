@@ -80,30 +80,25 @@ type TesseractOcr(settings: TesseractSettings) =
         Bottom = int (float32 rect.Y2 / scale)
     }
 
+    let lineOf (line: Layout.TextLine) =
+        match Option.ofObj line.Text, Option.ofNullable line.BoundingBox with
+        | Some text, Some rect when not (String.IsNullOrWhiteSpace text) ->
+            Some {
+                Text = text.Trim()
+                Box = box rect
+            }
+        | _ -> None
+
+    let paragraphOf (paragraph: Layout.Paragraph) = paragraph.TextLines |> Seq.choose lineOf |> List.ofSeq
+
+    let blockOf (block: Layout.Block) = { Paragraphs = block.Paragraphs |> Seq.map paragraphOf |> List.ofSeq }
+
     let recognize (bytes: byte[]) (sample: string) =
         let engine = engineFor (TesseractLanguages.forSample settings.Languages sample)
         use image = Pix.Image.LoadFromMemory bytes
         use scaled = image.Scale(scale, scale)
         use page = engine.Process(scaled, Nullable PageSegMode.Auto)
-
-        let blocks = [
-            for block in page.Layout do
-                {
-                    Paragraphs = [
-                        for paragraph in block.Paragraphs do
-                            [
-                                for line in paragraph.TextLines do
-                                    match Option.ofObj line.Text, Option.ofNullable line.BoundingBox with
-                                    | Some text, Some rect when not (String.IsNullOrWhiteSpace text) ->
-                                        yield {
-                                            Text = text.Trim()
-                                            Box = box rect
-                                        }
-                                    | _ -> ()
-                            ]
-                    ]
-                }
-        ]
+        let blocks = page.Layout |> Seq.map blockOf |> List.ofSeq
 
         {
             Area = {
