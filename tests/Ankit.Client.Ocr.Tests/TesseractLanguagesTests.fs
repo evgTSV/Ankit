@@ -26,3 +26,7 @@ let ``Languages of unknown script are kept`` () =
 [<Fact>]
 let ``All languages are used when none fits`` () =
     Assert.Equal("rus", TesseractLanguages.forSample "rus" "word")
+
+[<Fact>]
+let ``A short English word with an apostrophe is read as English`` () =
+    Assert.Equal("eng", TesseractLanguages.forSample "eng+rus" "I'd")
