@@ -231,9 +231,10 @@ Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services
   `DllImport` in F#.
 - OCR is split: `ScreenText` in the core (matching the clipboard's selection in recognized text, tested),
   `IOcrEngine` / `TesseractOcr` in the cross-platform `Ankit.Client.Ocr` (`Ocr` Paket group), the screenshot and the
-  anchor in `Ankit.Client.Windows/Ocr.fs`. Trained data is downloaded by the `DownloadTessdata` MSBuild target of
-  `Ankit.Client.Ocr` (Windows builds only) into the gitignored `src/Clients/tessdata/`; never commit `.traineddata`
-  files. Dispose the engine at exit, Tesseract reports loaded trained data as leaks otherwise.
+  anchor in `Ankit.Client.Windows/Ocr.fs`. Trained data comes from the Paket group `Tessdata` (`github
+  tesseract-ocr/tessdata_fast:4.1.0 <lang>.traineddata`, restored into `paket-files/tessdata/`), and `Ankit.Client.Ocr`
+  copies it to the output; external data goes through Paket, never an MSBuild download. Dispose the engine at exit,
+  Tesseract reports loaded trained data as leaks otherwise.
 - `Ankit.Client.Windows.Probe` is a console app for trying the capture in real apps (Ctrl+Alt+A); it has no tests.
 
 ## Code style

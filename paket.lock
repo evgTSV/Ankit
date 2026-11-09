@@ -30,6 +30,12 @@ NUGET
       Microsoft.Extensions.Logging.Abstractions (>= 10.0.3)
       System.Reflection.Emit (>= 4.7)
 
+GROUP Tessdata
+
+GITHUB
+  remote: tesseract-ocr/tessdata_fast
+    eng.traineddata (65727574dfcd264acbb0c3e07860e4e9e9b22185)
+    rus.traineddata (65727574dfcd264acbb0c3e07860e4e9e9b22185)
 GROUP Test
 RESTRICTION: == net10.0
 NUGET

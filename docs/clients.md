@@ -111,9 +111,10 @@ Reading the screen is shared by the desktop platforms, only taking the screensho
 
 Tesseract comes from the TesseractOCR package (Apache-2.0). It bundles the native libraries for Windows, which need the
 Visual C++ 2015–2022 runtime; macOS and Linux need the system's libtesseract (Homebrew, the distribution's package). The
-trained data is `tessdata_fast` (Apache-2.0, about 4 MB a language): Windows builds of `Ankit.Client.Ocr` download it
-into `src/Clients/tessdata/` (gitignored) once and copy it to `tessdata` next to the app. `TessdataLanguages` in the
-project sets the languages downloaded (`eng;rus`), `TesseractSettings.Languages` those loaded.
+trained data is `tessdata_fast` (Apache-2.0, about 4 MB a language), restored by Paket like the Anki sources: the
+group `Tessdata` in `paket.dependencies` lists one file per language (`eng`, `rus`), `paket.lock` pins the commit, and
+`Ankit.Client.Ocr` copies every `.traineddata` file of the group to `tessdata` next to the app. A new language is a
+line in that group and `dotnet paket update --group Tessdata`; `TesseractSettings.Languages` sets those loaded.
 
 Reading a strip takes 0.6–2 s depending on how much text it has (an IDE with a project tree is the slow case). A
 platform's own engine could implement `IOcrEngine` later, e.g. macOS Vision, which is faster and needs no trained data.

@@ -12,4 +12,3 @@ coverage-results/
 .env
 /src/Ankit.Server/appsettings.Development.json
 Properties/
-src/Clients/tessdata/
