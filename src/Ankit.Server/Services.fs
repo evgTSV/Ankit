@@ -1,5 +1,6 @@
 module Ankit.Server.Services
 
+open System
 open Anki.Backend
 open Anki.Decks
 open Anki.Notes
@@ -23,6 +24,8 @@ type InfraFail =
 
 [<RequireQualifiedAccess>]
 type SyncFailed =
+    /// The sync server settings miss a value the login needs, e.g. the username
+    | NotConfigured of message: string
     | AuthFailed of message: string
     | Aborted of message: string
     | NetworkError of message: string
@@ -111,14 +114,29 @@ type IAuthService =
 type AnkiAuthService(backend: RslibBackend, syncServerSettings: IOptionsMonitor<SyncServerSettings>) =
 
     let getAuth () : SyncResult<SyncAuth> =
-        let loginRequest =
-            SyncLoginRequest(
-                Username = syncServerSettings.CurrentValue.Username,
-                Password = syncServerSettings.CurrentValue.Password,
-                Endpoint = syncServerSettings.CurrentValue.Endpoint
-            )
+        let settings = syncServerSettings.CurrentValue
 
-        guardCallSync (fun () -> backend.SyncLogin loginRequest)
+        // Protobuf throws on a null string, and rslib would only try to log in with empty ones
+        let missing =
+            [
+                "Host", settings.Host
+                "Username", settings.Username
+                "Password", settings.Password
+            ]
+            |> List.filter (snd >> String.IsNullOrWhiteSpace)
+            |> List.map (fun (name, _) -> $"%s{SyncServerSettingsSection}:%s{name}")
+
+        if not missing.IsEmpty then
+            Error(SyncFailed.NotConfigured(String.Join(", ", missing) + " not set"))
+        else
+            let loginRequest =
+                SyncLoginRequest(
+                    Username = settings.Username,
+                    Password = settings.Password,
+                    Endpoint = settings.Endpoint
+                )
+
+            guardCallSync (fun () -> backend.SyncLogin loginRequest)
 
     interface IAuthService with
         member this.GetAuth() : SyncResult<SyncAuth> = getAuth ()
@@ -185,6 +203,8 @@ type AnkiSyncService(backend: RslibBackend, authService: IAuthService, logger: I
 
     let logFailure (failure: SyncFailed) =
         match failure with
+        | SyncFailed.NotConfigured message ->
+            logger.LogWarning("Sync skipped, the sync server is not configured: {Message}", message)
         | SyncFailed.Aborted message -> logger.LogInformation("Sync was aborted: {Message}", message)
         | SyncFailed.NetworkError message ->
             logger.LogWarning("Sync failed, sync server is unreachable: {Message}", message)

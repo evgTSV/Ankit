@@ -10,6 +10,7 @@
     <Compile Include="TempCollection.fs" />
     <Compile Include="CommandAssert.fs" />
     <Compile Include="SyncServiceTests.fs" />
+    <Compile Include="AuthServiceTests.fs" />
     <Compile Include="DeckServiceTests.fs" />
     <Compile Include="NoteServiceTests.fs" />
     <Compile Include="NotetypeServiceTests.fs" />

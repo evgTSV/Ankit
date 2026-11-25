@@ -92,6 +92,9 @@ which every OpenAI-compatible server has) and is `HEALTHY` while card suggestion
 check is `UNHEALTHY`, and its `description` says why, e.g. the server is unreachable or refuses the key. Unlike
 `/ping` it needs an API key. The server runs the same check once at startup and logs a warning when it fails.
 
+Without `SyncServer:Host`, `Username` or `Password` the server still starts: syncs are skipped with a warning in
+the log, and `/sync/full` answers `502` naming the missing settings.
+
 Changes answer once they are applied to the local collection, without waiting for the sync; `/sync/full` answers when
 the full sync is done. Reads don't trigger a sync.
 
