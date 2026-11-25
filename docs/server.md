@@ -74,6 +74,7 @@ In Swagger UI, use **Authorize** to enter a key; it is kept across page reloads.
 | `GET /notes?query=…`    | Anki search, e.g. `query=deck:Japanese tag:verb`; `deck:*` for all | `200` `[id, …]`       |
 | `GET /notes/{id}`       |                                                                  | `200` `{ "id", "noteTypeId", "fields", "tags" }` |
 | `POST /notes`           | `{ "deckId": 1, "noteTypeId": 1, "fields": ["front", "back"], "tags": ["optional"] }` | `201` `{ "id" }` |
+| `POST /notes/batch`     | `{ "notes": [{ "deckId", "noteTypeId", "fields", "tags" }, …] }` | `201` `{ "ids": [id, …] }` |
 | `GET /suggestion-modules` |                                                                | `200` `[{ "id", "description", "isDefault", "styles" }]` |
 | `POST /notes/suggestions` | `{ "term", "context", "noteTypeId", … }`, see [Card suggestions](#card-suggestions) | `200` `{ "notes": [{ "noteTypeId", "fields" }], "existingNoteIds" }` |
 | `PUT /notes/{id}`       | `{ "fields": ["front", "back"], "tags": ["optional"] }`          | `204`                   |
@@ -85,7 +86,8 @@ try the endpoints. Union values such as `direction` are case-insensitive (`uploa
 
 `fields` holds one value per field of the note type, in its order; `GET /note-types` lists them. `PUT /notes/{id}`
 keeps the tags when `tags` is left out. Deleting a deck deletes its child decks and all of their cards; the default
-deck stays: its cards are deleted and its name is reset. Deleting a note deletes its cards.
+deck stays: its cards are deleted and its name is reset. Deleting a note deletes its cards. `POST /notes/batch`
+adds all the notes in one transaction, or none of them when one is rejected; the ids are in the order of the notes.
 
 `GET /health` checks the services the server depends on: `llm` asks the LLM server for its models (`GET /models`,
 which every OpenAI-compatible server has) and is `HEALTHY` while card suggestions are off. It answers `503` when a
@@ -113,7 +115,7 @@ Errors are JSON with `code`, `message`, `traceId`, `timestamp` and `path`:
 
 `POST /notes/suggestions` drafts notes about a term with an LLM. It takes the context the term was found in into
 account, for example the sentence or paragraph, so the cards are about the sense meant there. Nothing is added to the
-collection: the client shows the drafts, the user edits or picks them, and adds them with `POST /notes`.
+collection: the client shows the drafts, the user edits or picks them, and adds them with `POST /notes/batch`.
 
 ```json
 {

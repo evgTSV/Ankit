@@ -144,16 +144,33 @@ let searchNotes (dto: SearchNotesDto) : EndpointHandler =
         let notes = ctx.GetService<INoteService>()
         query (fun () -> notes.Search dto.query) (Array.ofList >> writeJson Status200OK) ctx
 
+let private toNoteContent (dto: AddNoteDto) = {
+    Fields = List.ofArray dto.Fields
+    Tags = dto.Tags |> Option.map List.ofArray |> Option.defaultValue []
+}
+
 let addNote (dto: AddNoteDto) : EndpointHandler =
     fun ctx ->
         let notes = ctx.GetService<INoteService>()
+        change (fun () -> notes.Add(dto.DeckId, dto.NoteTypeId, toNoteContent dto)) created ctx
 
-        let content = {
-            Fields = List.ofArray dto.Fields
-            Tags = dto.Tags |> Option.map List.ofArray |> Option.defaultValue []
-        }
+let addNotes (dto: AddNotesDto) : EndpointHandler =
+    fun ctx ->
+        let notes = ctx.GetService<INoteService>()
 
-        change (fun () -> notes.Add(dto.DeckId, dto.NoteTypeId, content)) created ctx
+        let toAdd =
+            dto.Notes
+            |> List.ofArray
+            |> List.map (fun note -> {
+                DeckId = note.DeckId
+                NotetypeId = note.NoteTypeId
+                Content = toNoteContent note
+            })
+
+        change
+            (fun () -> notes.AddMany toAdd)
+            (fun ids -> writeJson Status201Created { CreatedManyDto.Ids = Array.ofList ids })
+            ctx
 
 let updateNote (dto: UpdateNoteDto) (noteId: int64) : EndpointHandler =
     fun ctx ->
