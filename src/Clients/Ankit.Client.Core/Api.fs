@@ -81,5 +81,5 @@ type IAnkitApi =
     abstract Decks: unit -> Async<Result<Deck list, ApiError>>
     abstract NoteTypes: unit -> Async<Result<NoteType list, ApiError>>
     abstract Suggest: request: SuggestRequest -> Async<Result<Suggestions, ApiError>>
-    /// The id of the new note
-    abstract AddNote: note: NewNote -> Async<Result<int64, ApiError>>
+    /// Adds all the notes or, when the server rejects one, none of them; the ids are in the order of the notes
+    abstract AddNotes: notes: NewNote list -> Async<Result<int64 list, ApiError>>

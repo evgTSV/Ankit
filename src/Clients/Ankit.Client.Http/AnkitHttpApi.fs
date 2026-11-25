@@ -11,7 +11,9 @@ open System.Threading.Tasks
 open Ankit.Client.Core.Api
 open Ankit.Client.Core.Settings
 
-type private Created = { Id: int64 }
+type private AddNotes = { Notes: NewNote list }
+
+type private Created = { Ids: int64 list }
 
 type private ErrorBody = { Message: string option }
 
@@ -94,11 +96,11 @@ type AnkitHttpApi(http: HttpClient) =
             post "notes/suggestions" request (fun response ->
                 response.Content.ReadFromJsonAsync<Suggestions>(json) |> Async.AwaitTask)
 
-        member _.AddNote(note) =
-            post "notes" note (fun response ->
+        member _.AddNotes(notes) =
+            post "notes/batch" { Notes = notes } (fun response ->
                 async {
                     let! created = response.Content.ReadFromJsonAsync<Created>(json) |> Async.AwaitTask
-                    return created.Id
+                    return created.Ids
                 })
 
     interface IDisposable with

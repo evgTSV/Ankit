@@ -108,8 +108,8 @@ let ``Suggestions are read with the existing notes`` () =
     Assert.Equal(Ok expected, run ((apiWith handler).Suggest(SuggestRequest.ofTerm "bank")))
 
 [<Fact>]
-let ``Adding a note posts it and gives its id`` () =
-    let handler = new FakeHandler(HttpStatusCode.Created, """{"id": 123}""")
+let ``Adding notes posts them in one batch and gives their ids`` () =
+    let handler = new FakeHandler(HttpStatusCode.Created, """{"ids": [123]}""")
 
     let note = {
         DeckId = 1L
@@ -118,8 +118,13 @@ let ``Adding a note posts it and gives its id`` () =
         Tags = []
     }
 
-    Assert.Equal(Ok 123L, run ((apiWith handler).AddNote note))
-    Assert.Equal("""{"deckId":1,"noteTypeId":10,"fields":["front","back"],"tags":[]}""", handler.RequestBody)
+    Assert.Equal(Ok [ 123L ], run ((apiWith handler).AddNotes [ note ]))
+    Assert.Equal("/notes/batch", handler.Request.Value.RequestUri.AbsolutePath)
+
+    Assert.Equal(
+        """{"notes":[{"deckId":1,"noteTypeId":10,"fields":["front","back"],"tags":[]}]}""",
+        handler.RequestBody
+    )
 
 [<Fact>]
 let ``401 means the key isn't accepted`` () =

@@ -82,20 +82,25 @@ let openSettings () =
         state.SettingsWindow <- Some window
         window.Show()
 
-/// Keeps the window inside the screen it opens on
+/// Between the cursor and the popup's corner, in device-independent pixels: the standard arrow is 12 px wide, so the
+/// popup opens beside it rather than under it
+let private cursorGap = 12.0
+
+/// Below and to the right of the cursor, kept inside the screen it opens on
 let private place (window: Window) (x: int, y: int) =
     window.WindowStartupLocation <- WindowStartupLocation.Manual
-    window.Position <- PixelPoint(x + 12, y + 12)
+    window.Position <- PixelPoint(x + int cursorGap, y + int cursorGap)
 
     window.Opened.Add(fun _ ->
         match window.Screens.ScreenFromPoint(PixelPoint(x, y)) |> Option.ofObj with
         | Some screen ->
             let area = screen.WorkingArea
             let scale = screen.Scaling
+            let gap = int (cursorGap * scale)
             let width = int (window.Bounds.Width * scale)
             let height = int (window.Bounds.Height * scale)
-            let left = min (x + 12) (area.Right - width) |> max area.X
-            let top = min (y + 12) (area.Bottom - height) |> max area.Y
+            let left = min (x + gap) (area.Right - width) |> max area.X
+            let top = min (y + gap) (area.Bottom - height) |> max area.Y
             window.Position <- PixelPoint(left, top)
         | None -> ())
 

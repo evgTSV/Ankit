@@ -224,7 +224,8 @@ Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services
   (no `Task`, System.Text.Json, reflection or P/Invoke) and of package dependencies Fable can't compile. Its API
   models are its own records, not the server's DTOs. `Context.extract` turns a platform's `Capture` (text, selection
   start and length) into the term and its sentence.
-- `Ankit.Client.Windows` targets `net10.0-windows` with `EnableWindowsTargeting`, so it builds on Linux and macOS CI.
+- `Ankit.Client.Windows` targets plain `net10.0` (it needs no Windows-only framework), so it builds everywhere and the
+  desktop app references it on every platform.
   UI Automation calls run on a thread pool thread, which is MTA (`onMtaThread`), never on a UI thread. The clipboard
   fallback sends Ctrl+C and restores the previous content; it can't keep the copy out of the clipboard history.
 - Win32 functions are declared in the C# project `Ankit.Client.Windows.Interop` with `LibraryImport` (a C# source
@@ -239,8 +240,8 @@ Compile order (`Ankit.Server.fsproj`): `Utils` → `Env` → `Dto` → `Services
 - `Ankit.Client.Windows.Probe` is a console app for trying the capture in real apps (Ctrl+Alt+A); it has no tests.
 - Core programs (`Popup`, `Settings`) are Elmish-style `init`/`update` returning effect lists, not `Cmd`s; test them in
   `Ankit.Client.Core.Tests`. `Ankit.Client.Desktop/Effects.fs` turns effects into commands, `Views.fs` hosts the
-  programs in FuncUI components (`ctx.useElmish`). Windows-only code in the desktop app goes under `#if WINDOWS` (the
-  `net10.0-windows` target), with a stub for the plain `net10.0` target.
+  programs in FuncUI components (`ctx.useElmish`). The desktop app is one `net10.0` build: Windows-only code checks
+  `RuntimeInformation.IsOSPlatform(OSPlatform.Windows)` at the start of the function (`Selection.fs`), no `#if`.
 - Add projects to `Ankit.sln` by hand (project block, configuration lines, `NestedProjects` entry), not with
   `dotnet sln add`: it rewrites the whole file, including the `Scripts/*.fsx` solution items.
 

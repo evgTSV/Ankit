@@ -154,11 +154,13 @@ block element are the capture, so extension contexts are the same as desktop one
 - **Popup:** on Windows, Ctrl+Alt+A reads the selection (see [Windows](#windows)) and opens the popup next to the
   cursor with the term, its context and the source (the URL or the window title), all editable. **Suggest** asks the
   server for drafts, which show their note type and fields, editable, each with a checkbox; **Add** adds the checked ones
-  to the chosen deck, which is preselected next time. Escape closes it.
-- It targets `net10.0` and `net10.0-windows`. Only the Windows build references the capture projects and wires the
-  hotkey (`#if WINDOWS` in `Selection.fs`); on other platforms the popup opens empty from the tray.
+  to the chosen deck in one batch (`POST /notes/batch`): all of them, or none when the server rejects one, so
+  **Add** can be retried. The chosen deck is preselected next time. Escape closes it.
+- One `net10.0` build for every platform. `Selection.fs` checks the platform at run time
+  (`RuntimeInformation.IsOSPlatform`): on other platforms than Windows there is no hotkey and the popup opens empty
+  from the tray.
 
-Run it with `dotnet run --project src/Clients/Ankit.Client.Desktop -f net10.0-windows`. Avalonia's build adds
+Run it with `dotnet run --project src/Clients/Ankit.Client.Desktop`. Avalonia's build adds
 `Avalonia.BuildServices`, which sends anonymous build telemetry; set `AVALONIA_TELEMETRY_OPTOUT=1` to turn it off.
 
 ## Server

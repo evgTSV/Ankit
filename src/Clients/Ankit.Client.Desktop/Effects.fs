@@ -6,10 +6,11 @@ open Ankit.Client.Core.Api
 open Ankit.Client.Http
 open Elmish
 
+/// Both calls at once; async has no and!, task has since F# 10
 let private both (first: Async<Result<'A, ApiError>>) (second: Async<Result<'B, ApiError>>) =
-    async {
-        let! a = first
-        let! b = second
+    task {
+        let! a = Async.StartAsTask first
+        and! b = Async.StartAsTask second
 
         return
             match a, b with
@@ -18,28 +19,13 @@ let private both (first: Async<Result<'A, ApiError>>) (second: Async<Result<'B, 
             | _, Error e -> Error e
     }
 
-/// One note after the other; the first error stops the rest
-let private addAll (api: IAnkitApi) (notes: NewNote list) =
-    let rec loop (notes: NewNote list) (ids: int64 list) =
-        async {
-            match notes with
-            | [] -> return Ok(List.rev ids)
-            | note :: rest ->
-                match! api.AddNote note with
-                | Ok id -> return! loop rest (id :: ids)
-                | Error e -> return Error e
-        }
-
-    loop notes []
-
 let popup (api: IAnkitApi) (rememberDeck: int64 -> unit) (effects: Popup.Effect list) : Cmd<Popup.Msg> =
     effects
     |> List.map (fun effect ->
         match effect with
-        | Popup.Effect.LoadLists ->
-            Cmd.OfAsync.perform (fun () -> both (api.Decks()) (api.NoteTypes())) () Popup.Loaded
+        | Popup.Effect.LoadLists -> Cmd.OfTask.perform (fun () -> both (api.Decks()) (api.NoteTypes())) () Popup.Loaded
         | Popup.Effect.RequestSuggestions request -> Cmd.OfAsync.perform api.Suggest request Popup.Suggested
-        | Popup.Effect.AddNotes notes -> Cmd.OfAsync.perform (addAll api) notes Popup.AddedNotes
+        | Popup.Effect.AddNotes notes -> Cmd.OfAsync.perform api.AddNotes notes Popup.AddedNotes
         | Popup.Effect.RememberDeck id -> Cmd.ofEffect (fun _ -> rememberDeck id))
     |> Cmd.batch
 

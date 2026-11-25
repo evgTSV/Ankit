@@ -45,7 +45,7 @@ group Client
 
 group Windows
     source https://api.nuget.org/v3/index.json
-    framework: net10.0-windows
+    framework: net10.0
 
     nuget Interop.UIAutomationClient 10.19041.0
 
