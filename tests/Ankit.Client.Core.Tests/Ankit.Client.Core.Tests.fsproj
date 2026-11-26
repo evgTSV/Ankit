@@ -8,6 +8,8 @@
   <ItemGroup>
     <Compile Include="ContextTests.fs" />
     <Compile Include="ScreenTextTests.fs" />
+    <Compile Include="PopupTests.fs" />
+    <Compile Include="SettingsTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

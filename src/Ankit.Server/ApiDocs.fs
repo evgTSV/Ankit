@@ -60,6 +60,9 @@ let ok<'T> = ResponseBody(typeof<'T>, statusCode = Status200OK)
 let okText = ResponseBody(typeof<string>, [| "text/plain" |], Status200OK)
 let created = ResponseBody(typeof<CreatedDto>, statusCode = Status201Created)
 
+let createdMany =
+    ResponseBody(typeof<CreatedManyDto>, statusCode = Status201Created)
+
 /// Marker for a response without a body, `describe` adds it to the operation itself
 let noContent = ResponseBody(typeof<unit>, statusCode = Status204NoContent)
 

@@ -31,6 +31,33 @@ type AddNoteDto = {
 }
 
 [<CLIMutable>]
+type AddNotesDto = {
+    [<Required(ErrorMessage = "Notes are required"); MinLength(1, ErrorMessage = "At least one note is required")>]
+    Notes: AddNoteDto array
+} with
+
+    // DataAnnotations don't validate nested objects
+    interface IValidatableObject with
+        member this.Validate(_) =
+            this.Notes
+            |> Seq.indexed
+            |> Seq.collect (fun (i, note) ->
+                let results = ResizeArray<ValidationResult>()
+
+                Validator.TryValidateObject(note, ValidationContext(note), results, true)
+                |> ignore
+
+                [
+                    for r in results do
+                        let names =
+                            r.MemberNames
+                            |> Seq.map (fun name ->
+                                $"notes[%d{i}].%s{jsonOptions.PropertyNamingPolicy.ConvertName name}")
+
+                        ValidationResult(r.ErrorMessage, names)
+                ])
+
+[<CLIMutable>]
 type RenameDeckDto = {
     [<Required(ErrorMessage = "Deck name is required")>]
     Name: string
@@ -53,6 +80,9 @@ type SearchNotesDto = {
 }
 
 type CreatedDto = { Id: int64 }
+
+/// The ids in the order the objects were sent
+type CreatedManyDto = { Ids: int64 array }
 
 type DeckDto = {
     Id: int64

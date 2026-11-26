@@ -19,6 +19,12 @@ type NoteServiceTests() =
         Tags = tags
     }
 
+    let toAdd deckId notetypeId fields = {
+        DeckId = deckId
+        NotetypeId = notetypeId
+        Content = content fields []
+    }
+
     let addBasic front back tags =
         ok (notes.Add(defaultDeck, basic, content [ front; back ] tags))
 
@@ -57,6 +63,38 @@ type NoteServiceTests() =
         let filteredId = collection.Backend.AddOrUpdateFilteredDeck(filtered).Id
 
         rejected (notes.Add(filteredId, basic, content [ "猫"; "cat" ] []))
+
+    [<Fact>]
+    member _.``Notes added together come back in order``() =
+        let ids =
+            ok (
+                notes.AddMany [
+                    toAdd defaultDeck basic [ "犬"; "dog" ]
+                    toAdd defaultDeck basic [ "猫"; "cat" ]
+                ]
+            )
+
+        Assert.Equal<string list list>(
+            [ [ "犬"; "dog" ]; [ "猫"; "cat" ] ],
+            ids |> List.map (fun id -> List.ofSeq (ok (notes.Get id)).Fields)
+        )
+
+    [<Fact>]
+    member _.``No note is added when one of them is rejected by rslib``() =
+        rejected (
+            notes.AddMany [
+                toAdd defaultDeck basic [ "犬"; "dog" ]
+                toAdd defaultDeck basic [ "only front" ]
+            ]
+        )
+
+        Assert.Empty(ok (notes.Search "deck:*"))
+
+    [<Fact>]
+    member _.``No note is added when one of them is in a missing deck``() =
+        rejected (notes.AddMany [ toAdd defaultDeck basic [ "犬"; "dog" ]; toAdd 424242L basic [ "猫"; "cat" ] ])
+
+        Assert.Empty(ok (notes.Search "deck:*"))
 
     [<Fact>]
     member _.``Reading a missing note is not found``() = notFound (notes.Get 424242L)

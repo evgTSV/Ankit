@@ -60,6 +60,10 @@ let endpoints = [
         |> describe "AddNote" "Add a note to a normal deck"
             (Some typeof<AddNoteDto>) [ created; invalid; shuttingDown ]
 
+        route "/notes/batch" <| bindOrDeclineJson Handlers.addNotes
+        |> describe "AddNotes" "Add several notes in one transaction: all of them or, when one is rejected, none"
+            (Some typeof<AddNotesDto>) [ createdMany; invalid; shuttingDown ]
+
         route "/notes/suggestions" <| bindOrDeclineJson Handlers.suggestNotes
         |> describe "SuggestNotes" "Draft notes about a term in its context with the LLM, without adding them"
             (Some typeof<SuggestNotesDto>) [ ok<SuggestionsDto>; invalid; llmFailed; llmOff ]

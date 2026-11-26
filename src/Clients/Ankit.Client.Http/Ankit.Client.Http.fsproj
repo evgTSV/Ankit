@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <NoWarn>$(NoWarn);NU1510</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="AnkitHttpApi.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="paket.references" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ankit.Client.Core\Ankit.Client.Core.fsproj" />
+  </ItemGroup>
+
+  <Import Project="..\..\..\.paket\Paket.Restore.targets" />
+</Project>

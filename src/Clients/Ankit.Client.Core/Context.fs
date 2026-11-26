@@ -1,4 +1,4 @@
-/// The term and the sentence around it, from text captured around a selection. Pure and Fable-compatible: every client
+/// The term and the surrounding sentence, from text captured around a selection. Pure and Fable-compatible: every client
 /// (desktop, Android, browser extension) extracts the context the same way
 module Ankit.Client.Core.Context
 

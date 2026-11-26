@@ -1,5 +1,6 @@
 module Ankit.Server.Services
 
+open System
 open Anki.Backend
 open Anki.Decks
 open Anki.Notes
@@ -23,6 +24,8 @@ type InfraFail =
 
 [<RequireQualifiedAccess>]
 type SyncFailed =
+    /// The sync server settings miss a value the login needs, e.g. the username
+    | NotConfigured of message: string
     | AuthFailed of message: string
     | Aborted of message: string
     | NetworkError of message: string
@@ -111,14 +114,29 @@ type IAuthService =
 type AnkiAuthService(backend: RslibBackend, syncServerSettings: IOptionsMonitor<SyncServerSettings>) =
 
     let getAuth () : SyncResult<SyncAuth> =
-        let loginRequest =
-            SyncLoginRequest(
-                Username = syncServerSettings.CurrentValue.Username,
-                Password = syncServerSettings.CurrentValue.Password,
-                Endpoint = syncServerSettings.CurrentValue.Endpoint
-            )
+        let settings = syncServerSettings.CurrentValue
 
-        guardCallSync (fun () -> backend.SyncLogin loginRequest)
+        // Protobuf throws on a null string, and rslib would only try to log in with empty ones
+        let missing =
+            [
+                "Host", settings.Host
+                "Username", settings.Username
+                "Password", settings.Password
+            ]
+            |> List.filter (snd >> String.IsNullOrWhiteSpace)
+            |> List.map (fun (name, _) -> $"%s{SyncServerSettingsSection}:%s{name}")
+
+        if not missing.IsEmpty then
+            Error(SyncFailed.NotConfigured(String.Join(", ", missing) + " not set"))
+        else
+            let loginRequest =
+                SyncLoginRequest(
+                    Username = settings.Username,
+                    Password = settings.Password,
+                    Endpoint = settings.Endpoint
+                )
+
+            guardCallSync (fun () -> backend.SyncLogin loginRequest)
 
     interface IAuthService with
         member this.GetAuth() : SyncResult<SyncAuth> = getAuth ()
@@ -185,6 +203,8 @@ type AnkiSyncService(backend: RslibBackend, authService: IAuthService, logger: I
 
     let logFailure (failure: SyncFailed) =
         match failure with
+        | SyncFailed.NotConfigured message ->
+            logger.LogWarning("Sync skipped, the sync server is not configured: {Message}", message)
         | SyncFailed.Aborted message -> logger.LogInformation("Sync was aborted: {Message}", message)
         | SyncFailed.NetworkError message ->
             logger.LogWarning("Sync failed, sync server is unreachable: {Message}", message)
@@ -263,6 +283,13 @@ type NoteContent = {
     Tags: string list
 }
 
+type NoteToAdd = {
+    /// A normal deck
+    DeckId: int64
+    NotetypeId: int64
+    Content: NoteContent
+}
+
 [<Interface>]
 type INoteService =
     abstract Get: noteId: int64 -> CommandResult<Note>
@@ -270,6 +297,8 @@ type INoteService =
     abstract Search: query: string -> CommandResult<int64 list>
     /// Adds the note with its cards in `deckId`, which must be a normal deck
     abstract Add: deckId: int64 * notetypeId: int64 * content: NoteContent -> CommandResult<int64>
+    /// Adds all the notes in one transaction, or none of them; the ids are in the order of the notes
+    abstract AddMany: notes: NoteToAdd list -> CommandResult<int64 list>
     /// Replaces the fields, and the tags when given
     abstract Update: noteId: int64 * fields: string list * tags: string list option -> CommandResult<unit>
     /// Removes the note with all of its cards
@@ -280,6 +309,51 @@ type AnkiNoteService(backend: RslibBackend) =
 
     let missing (noteId: int64) = CommandFailed.NotFound $"Note {noteId} doesn't exist"
 
+    let checkDeck (deckId: int64) =
+        result {
+            // rslib puts the cards into the default deck when the deck is missing or filtered, without telling
+            let! deck =
+                guardCommand (fun () -> backend.GetDeck(DeckId(Did = deckId)))
+                |> whenNotFound (CommandFailed.Rejected $"Deck {deckId} doesn't exist")
+
+            if deck.KindCase = Deck.KindOneofCase.Filtered then
+                return! Error(CommandFailed.Rejected $"Deck {deckId} is filtered, notes can't be added to it")
+        }
+
+    // rslib only says "missing note type"
+    let checkNotetype (notetypeId: int64) =
+        guardCommand (fun () -> backend.GetNotetype(NotetypeId(Ntid = notetypeId)) |> ignore)
+        |> whenNotFound (CommandFailed.Rejected $"Note type {notetypeId} doesn't exist")
+
+    let addMany (notes: NoteToAdd list) =
+        result {
+            do!
+                notes
+                |> List.map _.DeckId
+                |> List.distinct
+                |> List.traverseResultM checkDeck
+                |> Result.ignore
+
+            do!
+                notes
+                |> List.map _.NotetypeId
+                |> List.distinct
+                |> List.traverseResultM checkNotetype
+                |> Result.ignore
+
+            return!
+                guardCommand (fun () ->
+                    let request = AddNotesRequest()
+
+                    for added in notes do
+                        let note = Note(NotetypeId = added.NotetypeId)
+                        note.Fields.AddRange added.Content.Fields
+                        note.Tags.AddRange added.Content.Tags
+                        request.Requests.Add(AddNoteRequest(Note = note, DeckId = added.DeckId))
+
+                    backend.AddNotes(request).Nids |> List.ofSeq)
+        }
+
     interface INoteService with
         member _.Get noteId =
             guardCommand (fun () -> getNote noteId) |> whenNotFound (missing noteId)
@@ -288,27 +362,16 @@ type AnkiNoteService(backend: RslibBackend) =
             guardCommand (fun () -> backend.SearchNotes(SearchRequest(Search = query)).Ids |> List.ofSeq)
 
         member _.Add(deckId, notetypeId, content) =
-            result {
-                // rslib puts the cards into the default deck when the deck is missing or filtered, without telling
-                let! deck =
-                    guardCommand (fun () -> backend.GetDeck(DeckId(Did = deckId)))
-                    |> whenNotFound (CommandFailed.Rejected $"Deck {deckId} doesn't exist")
+            addMany [
+                {
+                    DeckId = deckId
+                    NotetypeId = notetypeId
+                    Content = content
+                }
+            ]
+            |> Result.map List.exactlyOne
 
-                if deck.KindCase = Deck.KindOneofCase.Filtered then
-                    return! Error(CommandFailed.Rejected $"Deck {deckId} is filtered, notes can't be added to it")
-
-                // rslib only says "missing note type"
-                do!
-                    guardCommand (fun () -> backend.GetNotetype(NotetypeId(Ntid = notetypeId)) |> ignore)
-                    |> whenNotFound (CommandFailed.Rejected $"Note type {notetypeId} doesn't exist")
-
-                return!
-                    guardCommand (fun () ->
-                        let note = Note(NotetypeId = notetypeId)
-                        note.Fields.AddRange content.Fields
-                        note.Tags.AddRange content.Tags
-                        backend.AddNote(AddNoteRequest(Note = note, DeckId = deckId)).NoteId)
-            }
+        member _.AddMany notes = addMany notes
 
         member _.Update(noteId, fields, tags) =
             guardCommand (fun () ->
